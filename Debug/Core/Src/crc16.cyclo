@@ -1,0 +1,1 @@
+../Core/Src/crc16.cpp:48:10:static uint16_t daniel::CRC16::ComputeCRC16(const uint8_t*, const uint16_t&)	2

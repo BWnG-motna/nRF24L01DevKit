@@ -1,0 +1,15 @@
+../Core/Src/ringbuffer.cpp:188:15:const T daniel::RingBuffer<T>::At(const uint16_t&) const [with T = unsigned char]	3
+../Core/Src/ringbuffer.cpp:222:17:const T& daniel::RingBuffer<T>::operator[](const uint16_t&) const [with T = unsigned char]	3
+../Core/Src/ringbuffer.cpp:73:6:bool daniel::RingBuffer<T>::IsEmpty() const [with T = unsigned char]	2
+../Core/Src/ringbuffer.cpp:85:6:bool daniel::RingBuffer<T>::IsFull() const [with T = unsigned char]	2
+../Core/Src/ringbuffer.cpp:97:6:bool daniel::RingBuffer<T>::Insert(const T&) [with T = unsigned char]	3
+../Core/Src/ringbuffer.cpp:120:6:bool daniel::RingBuffer<T>::Remove() [with T = unsigned char]	3
+../Core/Src/ringbuffer.cpp:141:6:bool daniel::RingBuffer<T>::Remove(T*) [with T = unsigned char]	3
+../Core/Src/ringbuffer.cpp:240:6:void daniel::RingBuffer<T>::Reset() [with T = unsigned char]	1
+../Core/Src/ringbuffer.cpp:165:10:uint16_t daniel::RingBuffer<T>::GetCount() const [with T = unsigned char]	1
+../Core/Src/ringbuffer.cpp:49:6:bool daniel::RingBuffer<T>::Alloc(const uint16_t&) [with T = unsigned char]	4
+../Core/Src/ringbuffer.cpp:248:10:uint16_t daniel::RingBuffer<T>::GetSize() const [with T = unsigned char]	1
+../Core/Src/ringbuffer.cpp:255:6:void daniel::RingBuffer<T>::RemoveUntil(const T&) [with T = unsigned char]	4
+../Core/Src/ringbuffer.cpp:14:1:daniel::RingBuffer<T>::RingBuffer() [with T = unsigned char]	2
+../Core/Src/ringbuffer.cpp:25:1:daniel::RingBuffer<T>::RingBuffer(const uint16_t&) [with T = unsigned char]	2
+../Core/Src/ringbuffer.cpp:36:1:daniel::RingBuffer<T>::~RingBuffer() [with T = unsigned char]	3
