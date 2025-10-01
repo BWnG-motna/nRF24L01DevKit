@@ -10,6 +10,7 @@
 #include "usart.h"
 #include "crc16.h"
 #include "nRF24L01.h"
+#include "LEDs.h"
 
 extern UART_HandleTypeDef huart1 ;
 extern TIM_HandleTypeDef  htim6 ;
@@ -17,6 +18,7 @@ extern SPI_HandleTypeDef  hspi1 ;
 
 daniel::USART    uart( & huart1 ) ;
 daniel::nRF24L01 rf( & hspi1 ) ;
+daniel::LEDs     led ;
 
 daniel::RfMode   rfMode = daniel::RfMode::TX ;
 
@@ -33,6 +35,10 @@ void MainProc()
 	rf.Begin( rfMode ) ;
 
 	HAL_TIM_Base_Start_IT( &htim6 ) ;
+
+	led.SetDebugLed1( false ) ;
+	led.SetDebugLed2( false ) ;
+	led.SetDebugLed3( false ) ;
 
 	uint8_t payload[ 32 ] ;
 	for( uint8_t pos = 0 ; pos < 32 ; ++pos )
@@ -75,10 +81,14 @@ void ReceiveUartRx( uint8_t const dat , uint8_t const port )
 	{
 
 	}
+	else if( 3 == port )
+	{
+
+	}
 }
 
 
-void TimIrq() // is called each 10 milliseconds
+void TimIrq() // is called each 1 milliseconds
 {
 	static uint16_t upCount = 0 ;
 
@@ -87,6 +97,7 @@ void TimIrq() // is called each 10 milliseconds
 	{
 		upCount = 0 ;
 		oneSecIrq = true ;
+		led.ToggleDebugLed1() ;
 	}
 }
 

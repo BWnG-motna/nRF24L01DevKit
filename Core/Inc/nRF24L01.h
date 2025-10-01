@@ -34,14 +34,14 @@ private :
 	RfMode rfMode ;
 
 private :
-	static constexpr char const * errType[ 4 ] = { "HAL_OK" , "HAL_ERROR" , "HAL_BUSY" , "HAL_TIMEOUT" } ;
-	static constexpr bool const leaveLog = true ;
+	static char const * errType[ 4 ] ;
+	static GPIO_TypeDef * IRQ_Port ;
 
 public :
 	static constexpr uint16_t IRQ_Pin  = GPIO_PIN_0 ;
 
 private :
-	static GPIO_TypeDef * IRQ_Port ;
+	bool leaveLog ;
 
 private :
 	void Init() ;

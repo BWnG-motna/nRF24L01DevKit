@@ -10,10 +10,11 @@
 
 
 GPIO_TypeDef * daniel::nRF24L01::IRQ_Port = reinterpret_cast< GPIO_TypeDef * >( GPIOB_BASE ) ;
+char const * daniel::nRF24L01::errType[ 4 ] = { "HAL_OK" , "HAL_ERROR" , "HAL_BUSY" , "HAL_TIMEOUT" } ;
 
 
 daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle )
-	: pHandle( _pHandle ) , isCS( false ) , pUart( nullptr ) , payloadSize( 32 ) , rfMode( RfMode::Unknown )
+	: pHandle( _pHandle ) , isCS( false ) , pUart( nullptr ) , payloadSize( 32 ) , rfMode( RfMode::Unknown ) , leaveLog( false )
 {
 	SetCS( false ) ;
 	Log( "nRF24L01: created\r\n" ) ;
@@ -31,7 +32,7 @@ void daniel::nRF24L01::SetCS( bool const & isEnable )
 void daniel::nRF24L01::SetCE( bool const & isEnable )
 {
 	// CE signal
-	Log( "nRF24L01: SetCE      - [ %s ]\r\n" , ( true == isEnable ) ? "true " : "false" ) ;
+	//Log( "nRF24L01: SetCE      - [ %s ]\r\n" , ( true == isEnable ) ? "true " : "false" ) ;
 	HAL_GPIO_WritePin( GPIOC , GPIO_PIN_4 , ( true == isEnable ) ? GPIO_PIN_SET : GPIO_PIN_RESET ) ;
 }
 
@@ -97,6 +98,8 @@ void daniel::nRF24L01::Inspection()
 	uint8_t value[ 17 ] ;
 	uint8_t valuePos = 0 ;
 
+	leaveLog = true ;
+
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::CONFIG      ) ; // enable CRC
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::EN_AA       ) ; // enable AUTOACK for all data pipe
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::EN_RXADDR   ) ; // enable RX address for all data pipe
@@ -115,9 +118,11 @@ void daniel::nRF24L01::Inspection()
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::DYNPD       ) ; // No Dynamic payload length
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::FEATURE     ) ; // Others
 
-	for( uint8_t pos = 0 ; pos < valuePos ; ++pos )
+	leaveLog = false ;
+
+	if( 0 == value[ 0 ] )
 	{
-		Log( "nRF24L01: Insp - 0x%02X\r\n" , value[ pos ] ) ;
+
 	}
 }
 
@@ -231,7 +236,7 @@ uint8_t daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t const 
 	namespace TYPE = nordic::type ;
 	namespace CMD  = nordic::cmd  ;
 
-	Log( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - val[ 0x%02X ]\r\n" , ( TYPE::READ == accessType ) ? "read " : "write" , reg , val ) ;
+	//Log( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - val[ 0x%02X ]\r\n" , ( TYPE::READ == accessType ) ? "read " : "write" , reg , val ) ;
 
 	uint8_t cmd = ( ( TYPE::READ == accessType ) ? CMD::R_REGISTER : CMD::W_REGISTER ) | reg ;
 	uint8_t ret = 0x00 ;
@@ -253,6 +258,8 @@ uint8_t daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t const 
 	{
 		spiRes = HAL_SPI_Transmit( pHandle , & res , 1 , spiTimeOut ) ;
 	}
+
+	Log( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - Q val[ 0x%02X ] - R val[ 0x%02X ]\r\n" , ( TYPE::READ == accessType ) ? "read " : "write" , reg , val , res ) ;
 
 	SetCS( false ) ;
 
@@ -367,7 +374,7 @@ void daniel::nRF24L01::IrqTx()
 	}
 	else
 	{
-		HAL_GPIO_WritePin( IRQ_Port , IRQ_Pin , GPIO_PIN_SET ) ;
+		HAL_GPIO_WritePin ( IRQ_Port , IRQ_Pin , GPIO_PIN_SET ) ;
 		status = status | 0x10 ;
 	}
 

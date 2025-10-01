@@ -48,16 +48,16 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-uint8_t timer7UpCnt = 0 ;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_USART3_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM6_Init(void);
-static void MX_USART3_UART_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -98,14 +98,13 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART1_UART_Init();
+  MX_USART3_UART_Init();
   MX_SPI1_Init();
   MX_TIM6_Init();
-  MX_USART3_UART_Init();
 
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
-
   MainProc() ;
 #if 0
   /* USER CODE END 2 */
@@ -167,15 +166,6 @@ void SystemClock_Config(void)
   */
 static void MX_NVIC_Init(void)
 {
-  /* SPI1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(SPI1_IRQn, 1, 0);
-  HAL_NVIC_EnableIRQ(SPI1_IRQn);
-  /* USART1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(USART1_IRQn, 1, 0);
-  HAL_NVIC_EnableIRQ(USART1_IRQn);
-  /* TIM6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(TIM6_IRQn, 1, 0);
-  HAL_NVIC_EnableIRQ(TIM6_IRQn);
   /* EXTI0_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(EXTI0_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
@@ -201,8 +191,8 @@ static void MX_SPI1_Init(void)
   hspi1.Init.Mode = SPI_MODE_MASTER;
   hspi1.Init.Direction = SPI_DIRECTION_2LINES;
   hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi1.Init.CLKPolarity = SPI_POLARITY_HIGH;
-  hspi1.Init.CLKPhase = SPI_PHASE_2EDGE;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
   hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
@@ -367,7 +357,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : SPI1_IRQ_Pin */
   GPIO_InitStruct.Pin = SPI1_IRQ_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(SPI1_IRQ_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -390,6 +380,7 @@ static void MX_GPIO_Init(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
+
   /* USER CODE END Callback 0 */
   if (htim->Instance == TIM7)
   {
@@ -397,10 +388,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
   /* USER CODE BEGIN Callback 1 */
 
-  	if( htim->Instance == TIM6 )
-  	{
-  		TimIrq() ;
-  	}
+	if( htim->Instance == TIM6 )
+	{
+		TimIrq() ;
+	}
   /* USER CODE END Callback 1 */
 }
 
@@ -418,8 +409,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
