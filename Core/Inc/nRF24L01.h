@@ -34,8 +34,9 @@ private :
 	RfMode rfMode ;
 
 private :
-	static char const * errType[ 4 ] ;
-	static GPIO_TypeDef * IRQ_Port ;
+	static    char const * errType[ 4 ] ;
+	static uint8_t const   rfAddr [ 5 ] ;
+	static GPIO_TypeDef  * IRQ_Port ;
 
 public :
 	static constexpr uint16_t IRQ_Pin  = GPIO_PIN_0 ;
@@ -49,14 +50,15 @@ private :
 	void SetCE( bool const & isEnable = false ) ;
 
 private :
-	uint8_t AccessReg( uint8_t const & accessType , uint8_t const & reg , uint8_t const & val = 0x00 ) ;
+	uint8_t   AccessReg( uint8_t const & accessType , uint8_t const & reg , uint8_t const & val = 0x00 ) ;
+	uint8_t * AccessReg( uint8_t const & accessType , uint8_t const & reg , uint8_t const & len , uint8_t const * pVal ) ;
 	uint8_t GetStatus() ;
 
 private :
 	void PowerOnOff( bool isOn ) ;
 
-	void FlushFIFO() const ;
-	void FlushFIFO( uint8_t const & type ) const ;
+	void FlushFIFO() ;
+	void FlushFIFO( uint8_t const & type ) ;
 
 	void SetRfMode( RfMode const & mode ) ;
 
@@ -80,6 +82,7 @@ public :
 	void Irq() ;
 	void Receive ( uint8_t * payload ) ;
 	void Transmit( uint8_t * payload ) ;
+	void ShowSpecificValue() ;
 
 public :
 	void Begin( RfMode const & mode ) ;

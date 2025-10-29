@@ -54,6 +54,10 @@ void MainProc()
 			{
 				rf.Transmit( payload ) ;
 			}
+			else
+			{
+				rf.ShowSpecificValue() ;
+			}
 			oneSecIrq = false ;
 		}
 	}
@@ -93,11 +97,15 @@ void TimIrq() // is called each 1 milliseconds
 	static uint16_t upCount = 0 ;
 
 	++upCount ;
+	if( 0 == ( upCount % 500 ) )
+	{
+		led.ToggleDebugLed1() ;
+	}
+
 	if( 1000 <= upCount )
 	{
 		upCount = 0 ;
 		oneSecIrq = true ;
-		led.ToggleDebugLed1() ;
 	}
 }
 
