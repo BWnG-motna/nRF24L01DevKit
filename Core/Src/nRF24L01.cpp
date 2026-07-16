@@ -19,8 +19,9 @@ uint8_t const   daniel::nRF24L01::rfAddrP4      =  rfAddrP1[ 4 ] + 3 ;
 
 
 daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLog )
-	: pHandle( _pHandle )   , isCS( false )     , pUart( nullptr ) , payloadSize( 32 ) , rfMode( RfMode::Unknown ) ,
-	  leaveLog( _leaveLog ) , debugLog( false ) , autoACK( true )
+	: pHandle( _pHandle )       , isCS( false )     , isCE( false )    , pUart( nullptr ) , payloadSize( 32 ) ,
+	  leaveLog( _leaveLog )     , debugLog( false ) , autoACK( true )  , rfChannel( 0x4C ) ,
+	  rfMode( RfMode::Unknown ) , rfPower( RfPower::Power_0dBm )       , rfLnaGain( RfLnaGain::High ) , rfDataRate( RfDataRate::Rate_1Mbps )
 {
 	SetCS( false ) ;
 	LogEvent( "nRF24L01: created\r\n" ) ;
@@ -28,8 +29,9 @@ daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLo
 
 
 daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , USART * _pUart , bool const & _leaveLog )
-	: pHandle( _pHandle )   , isCS( false )     , pUart( _pUart ) , payloadSize( 32 ) , rfMode( RfMode::Unknown ) ,
-	  leaveLog( _leaveLog ) , debugLog( false ) , autoACK( true )
+	: pHandle( _pHandle )       , isCS( false )     , isCE( false )   , pUart( _pUart ) , payloadSize( 32 ) ,
+	  leaveLog( _leaveLog )     , debugLog( false ) , autoACK( true ) , rfChannel( 0x4C ) ,
+	  rfMode( RfMode::Unknown ) , rfPower( RfPower::Power_0dBm )      , rfLnaGain( RfLnaGain::High ) , rfDataRate( RfDataRate::Rate_1Mbps )
 {
 	SetCS( false ) ;
 	LogEvent( "nRF24L01: created\r\n" ) ;
@@ -41,6 +43,7 @@ void daniel::nRF24L01::SetCS( bool const & isEnable )
 	// CSN signal
 	// RX mode - CS must be always enabled
 	// TX mode - CS must be enabled during sending data, otherwise, must be disabled
+	isCS = isEnable ;
 	HAL_GPIO_WritePin( GPIOC , GPIO_PIN_5 , ( true == isEnable ) ? GPIO_PIN_RESET : GPIO_PIN_SET ) ;
 }
 
@@ -49,6 +52,7 @@ void daniel::nRF24L01::SetCE( bool const & isEnable )
 {
 	// CE signal
 	// CE must be enabled during SPI communication
+	isCE = isEnable ;
 	HAL_GPIO_WritePin( GPIOC , GPIO_PIN_4 , ( true == isEnable ) ? GPIO_PIN_SET : GPIO_PIN_RESET ) ;
 }
 
@@ -79,6 +83,25 @@ void daniel::nRF24L01::End()
 }
 
 
+void daniel::nRF24L01::SetChannel( uint8_t const & ch )
+{
+	rfChannel = ( 125 < ch ) ? 125 : ch ;
+
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg ;
+
+	bool wasCE = isCE ;
+
+	SetCE( false ) ;
+	AccessReg( TYPE::WRITE , REG::RF_CH , rfChannel ) ;
+
+	if( true == wasCE || RfMode::RX == rfMode )
+	{
+		SetCE( true ) ;
+	}
+}
+
+
 void daniel::nRF24L01::Init()
 {
 	LogEvent( "nRF24L01: Init\r\n" ) ;
@@ -88,22 +111,24 @@ void daniel::nRF24L01::Init()
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
-	uint8_t enAA = ( true == autoACK ) ? 0x01 : 0x00 ;
+	uint8_t enAA    = ( true == autoACK ) ? 0x01 : 0x00 ;
+	uint8_t rfSetup = GetRfSetupVal() ;
+	uint8_t ch      = ( 125 < rfChannel ) ? 125 : rfChannel ;
 
 	AccessReg( TYPE::WRITE , REG::CONFIG      , 0x08 ) ; // enable CRC
 	AccessReg( TYPE::WRITE , REG::EN_AA       , enAA ) ; // enable AUTOACK for P0
 	AccessReg( TYPE::WRITE , REG::EN_RXADDR   , 0x3F ) ; // enable RX address for all data pipe
 	AccessReg( TYPE::WRITE , REG::SETUP_AW    , 0x03 ) ; // address field width( 5 )
 	AccessReg( TYPE::WRITE , REG::SETUP_RETR  , 0x03 ) ; // auto retransmit delay( 250us ) , retransmit count( 3 )
-	AccessReg( TYPE::WRITE , REG::RF_CH       , 0x4C ) ; // RF channel ( 76 )
-	AccessReg( TYPE::WRITE , REG::RF_SETUP    , 0x06 ) ; // data rates ( 1Mbps ) , RF output power( 0 dBm )
-	AccessReg( TYPE::WRITE , REG::RF_STATUS   , 0x7F ) ; // interrupt enabled for Rx and TX , RX FIFO empty, TX FIFO ready
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P0  , 0x05 ,   rfAddrP0 ) ;
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x05 ,   rfAddrP1 ) ;
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x01 , & rfAddrP2 ) ;
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P2  , 0x01 , & rfAddrP3 ) ;
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P3  , 0x01 , & rfAddrP4 ) ;
-	AccessReg( TYPE::WRITE , REG::TX_ADDR     , 0x05 ,   rfAddrP0 ) ;
+	AccessReg( TYPE::WRITE , REG::RF_CH       , ch      ) ; // RF channel
+	AccessReg( TYPE::WRITE , REG::RF_SETUP    , rfSetup ) ; // data rates and RF output power
+	AccessReg( TYPE::WRITE , REG::RF_STATUS   , 0x7F    ) ; // interrupt enabled for Rx and TX , RX FIFO empty, TX FIFO ready
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P0  , 0x05 ,   rfAddrP0 ) ; // Rx Address - pipe 0
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x05 ,   rfAddrP1 ) ; // Rx Address - pipe 1
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x01 , & rfAddrP2 ) ; // Rx Address - pipe 2
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P2  , 0x01 , & rfAddrP3 ) ; // Rx Address - pipe 3
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P3  , 0x01 , & rfAddrP4 ) ; // Rx Address - pipe 4
+	AccessReg( TYPE::WRITE , REG::TX_ADDR     , 0x05 ,   rfAddrP0 ) ; // Tx Address
 	AccessReg( TYPE::WRITE , REG::RX_PW_P0    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P1    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P2    , payloadSize ) ; // payload size
@@ -119,30 +144,51 @@ void daniel::nRF24L01::Init()
 	SetCE( false ) ;
 }
 
+
+uint8_t daniel::nRF24L01::GetRfSetupVal() const
+{
+	uint8_t val = 0x00 ;
+
+	val |= ( RfDataRate::Rate_2Mbps  == rfDataRate ) ? 0x08 : 0x00 ;
+	val |= ( RfPower::Power_Neg12dBm == rfPower    ) ? 0x02 : 0x00 ;
+	val |= ( RfPower::Power_Neg6dBm  == rfPower    ) ? 0x04 : 0x00 ;
+	val |= ( RfPower::Power_0dBm     == rfPower    ) ? 0x06 : 0x00 ;
+	val |= ( RfLnaGain::High         == rfLnaGain  ) ? 0x01 : 0x00 ;
+
+	return val ;
+}
+
+
 void daniel::nRF24L01::Inspection()
 {
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
-	uint8_t value[ 17 ] ;
+	uint8_t value[ 23 ] ;
 	uint8_t valuePos = 0 ;
 
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::CONFIG      ) ; // enable CRC
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::EN_AA       ) ; // enable AUTOACK for all data pipe
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::EN_RXADDR   ) ; // enable RX address for all data pipe
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::SETUP_AW    ) ; // address field width( 5 )
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::SETUP_RETR  ) ; // auto retransmit delay( 250us ) , retransmit count( 3 )
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RF_CH       ) ; // RF channel ( 0 )
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RF_SETUP    ) ; // data rates ( 1Mbps ) , RF output power( 0 dBm )
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RF_STATUS   ) ; // interrupt enabled for Rx and TX , RX FIFO empty, TX FIFO ready
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P0    ) ; // data pipe 0 not used in RX
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P1    ) ; // data pipe 1 not used in RX
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P2    ) ; // data pipe 2 not used in RX
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P3    ) ; // data pipe 3 not used in RX
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P4    ) ; // data pipe 4 not used in RX
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P5    ) ; // data pipe 5 not used in RX
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::CONFIG      ) ; // CRC
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::EN_AA       ) ; // AUTOACK
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::EN_RXADDR   ) ; // RX address for all data pipe
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::SETUP_AW    ) ; // address field width
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::SETUP_RETR  ) ; // auto retransmit delay , retransmit count
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RF_CH       ) ; // RF channel
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RF_SETUP    ) ; // data rates , RF output power
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RF_STATUS   ) ; // interrupt for Rx and TX
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P0  , 0x05 ) ; // Rx Address - pipe 0
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P1  , 0x05 ) ; // Rx Address - pipe 1
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P1  , 0x01 ) ; // Rx Address - pipe 2
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P2  , 0x01 ) ; // Rx Address - pipe 3
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P3  , 0x01 ) ; // Rx Address - pipe 4
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::TX_ADDR     , 0x05 ) ; // Tx Address - pipe 0
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P0    ) ; // data pipe 0
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P1    ) ; // data pipe 1
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P2    ) ; // data pipe 2
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P3    ) ; // data pipe 3
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P4    ) ; // data pipe 4
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P5    ) ; // data pipe 5
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::FIFO_STATUS ) ; // RX and TX FIFO( empty )
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::DYNPD       ) ; // No Dynamic payload length
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::DYNPD       ) ; // Dynamic payload length
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::FEATURE     ) ; // Others
 
 	if( 0 == value[ 0 ] )

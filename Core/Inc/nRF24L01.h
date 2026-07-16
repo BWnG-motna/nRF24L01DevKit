@@ -2,7 +2,11 @@
 
 #include "common.h"
 #include "usart.h"
+
 #include "RfMode.h"
+#include "RfPower.h"
+#include "RfLnaGain.h"
+#include "RfDataRate.h"
 
 #include "stm32f1xx_hal_spi.h"
 #include "stm32f103xe.h"
@@ -22,6 +26,7 @@ private :
 
 private :
 	bool isCS ;
+	bool isCE ;
 
 private :
 	USART * pUart ;
@@ -29,9 +34,6 @@ private :
 private :
 	uint8_t payloadSize ;
 	uint8_t recvData[ 32 ] ;
-
-private :
-	RfMode rfMode ;
 
 private :
 	static    char const * errType [ 4 ] ;
@@ -51,6 +53,15 @@ private :
 	bool autoACK  ;
 
 private :
+	uint8_t    rfChannel ;
+
+private :
+	RfMode     rfMode ;
+	RfPower    rfPower ;
+	RfLnaGain  rfLnaGain ;
+	RfDataRate rfDataRate ;
+
+private :
 	void Init() ;
 	void SetCS( bool const & isEnable = true  ) ;
 	void SetCE( bool const & isEnable = false ) ;
@@ -68,6 +79,7 @@ private :
 
 	void SetRfMode( RfMode const & mode ) ;
 
+	uint8_t GetRfSetupVal() const ;
 	uint8_t PushToTxFifo ( uint8_t * payload ) ;
 	uint8_t PopFromRxFifo( uint8_t * payload ) ;
 
@@ -100,6 +112,9 @@ public :
 public :
 	void Begin( RfMode const & mode ) ;
 	void End() ;
+
+public :
+	void SetChannel( uint8_t const & ch ) ;
 
 public :
 	nRF24L01( SPI_HandleTypeDef * pHandle , bool const & leaveLog = false ) ;
