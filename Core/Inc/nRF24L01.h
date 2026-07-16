@@ -34,8 +34,12 @@ private :
 	RfMode rfMode ;
 
 private :
-	static    char const * errType[ 4 ] ;
-	static uint8_t const   rfAddr [ 5 ] ;
+	static    char const * errType [ 4 ] ;
+	static uint8_t const   rfAddrP0[ 5 ] ;
+	static uint8_t const   rfAddrP1[ 5 ] ;
+	static uint8_t const   rfAddrP2 ;
+	static uint8_t const   rfAddrP3 ;
+	static uint8_t const   rfAddrP4 ;
 	static GPIO_TypeDef  * IRQ_Port ;
 
 public :
@@ -43,6 +47,8 @@ public :
 
 private :
 	bool leaveLog ;
+	bool debugLog ;
+	bool autoACK  ;
 
 private :
 	void Init() ;
@@ -69,17 +75,24 @@ private :
 	void Inspection() ;
 
 private :
-	void IrqTx() ;
-	void IrqRx() ;
+	void LogEvent( char const * const format , ... ) const ;
+	void LogDebug( char const * const format , ... ) const ;
 
 private :
-	void Log( char const * const format , ... ) const ;
+	void DelayUS( uint16_t const & us ) ;
+
+private :
+	int8_t IrqTx() ;
+	int8_t IrqRx() ;
+
+public :
+	int8_t Irq() ;
 
 public :
 	void SetUart( USART * _pUart ) ;
+	void LeaveLog( bool const & is ) ;
 
 public :
-	void Irq() ;
 	void Receive ( uint8_t * payload ) ;
 	void Transmit( uint8_t * payload ) ;
 	void ShowSpecificValue() ;
@@ -89,7 +102,8 @@ public :
 	void End() ;
 
 public :
-	nRF24L01( SPI_HandleTypeDef * pHandle ) ;
+	nRF24L01( SPI_HandleTypeDef * pHandle , bool const & leaveLog = false ) ;
+	nRF24L01( SPI_HandleTypeDef * pHandle , USART * pUart , bool const & leaveLog = false ) ;
 
 } ; // class
 

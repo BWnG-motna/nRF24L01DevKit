@@ -7,44 +7,76 @@
 
 
 #include "mainProc.h"
+
+#include "GPIO.h"
 #include "usart.h"
 #include "crc16.h"
 #include "nRF24L01.h"
-#include "LEDs.h"
 
 extern UART_HandleTypeDef huart1 ;
+extern UART_HandleTypeDef huart3 ;
 extern TIM_HandleTypeDef  htim6 ;
 extern SPI_HandleTypeDef  hspi1 ;
 
-daniel::USART    uart( & huart1 ) ;
+daniel::USART    uart1( & huart1 ) ;
+daniel::USART    uart3( & huart3 ) ;
 daniel::nRF24L01 rf( & hspi1 ) ;
-daniel::LEDs     led ;
-
-daniel::RfMode   rfMode = daniel::RfMode::TX ;
-
 
 static bool oneSecIrq = false ;
+static bool liveIrq   = false ;
+static bool runOp     = false ;
+
+
+#define DIPSW_IS_EXISTED ( 1 )
 
 
 void MainProc()
 {
-	uart.Begin() ;
-	uart.SendMessage( "\r\n\r\n" ) ;
+	uart1.Begin() ;
+	uart1.SendMessage( "\r\n\r\n" ) ;
 
-	rf.SetUart( & uart ) ;
+#if ( DIPSW_IS_EXISTED )
+
+	bool is = daniel::GPIO::GetOpMode() ;
+	daniel::RfMode rfMode = ( true == is ) ? daniel::RfMode::TX : daniel::RfMode::RX ;
+
+#else
+
+	daniel::RfMode rfMode = daniel::RfMode::RX ;
+
+#endif
+
+	rf.LeaveLog( true ) ;
+	rf.SetUart( & uart1 ) ;
 	rf.Begin( rfMode ) ;
 
-	HAL_TIM_Base_Start_IT( &htim6 ) ;
+	HAL_TIM_Base_Start_IT( & htim6 ) ;
 
-	led.SetDebugLed1( false ) ;
-	led.SetDebugLed2( false ) ;
-	led.SetDebugLed3( false ) ;
+	daniel::GPIO::SetEventLed ( false ) ;
+
+	/**/ if( daniel::RfMode::RX == rfMode )
+	{
+		daniel::GPIO::SetRxModeLed( true  ) ;
+		daniel::GPIO::SetTxModeLed( false ) ;
+	}
+	else if( daniel::RfMode::TX == rfMode )
+	{
+		daniel::GPIO::SetRxModeLed( false ) ;
+		daniel::GPIO::SetTxModeLed( true  ) ;
+	}
+	else
+	{
+		daniel::GPIO::SetRxModeLed( false ) ;
+		daniel::GPIO::SetTxModeLed( false ) ;
+	}
 
 	uint8_t payload[ 32 ] ;
 	for( uint8_t pos = 0 ; pos < 32 ; ++pos )
 	{
 		payload[ pos ] = pos ;
 	}
+
+	runOp = true ;
 
 	while( true )
 	{
@@ -60,12 +92,31 @@ void MainProc()
 			}
 			oneSecIrq = false ;
 		}
+
+		if( true == liveIrq )
+		{
+			if( daniel::RfMode::TX == rfMode )
+			{
+				daniel::GPIO::ToggleTxModeLed() ;
+			}
+			else
+			{
+				daniel::GPIO::ToggleRxModeLed() ;
+			}
+
+			liveIrq = false ;
+		}
 	}
 }
 
 
 void UartRX( UART_HandleTypeDef * pHandle , uint8_t const port )
 {
+	if( false == runOp )
+	{
+		return ;
+	}
+
 	uint32_t isrflags = READ_REG( pHandle->Instance->SR  ) ;
 	uint32_t cr1its   = READ_REG( pHandle->Instance->CR1 ) ;
 
@@ -81,7 +132,12 @@ void UartRX( UART_HandleTypeDef * pHandle , uint8_t const port )
 
 void ReceiveUartRx( uint8_t const dat , uint8_t const port )
 {
-	if( 1 == port )
+	if( false == runOp )
+	{
+		return ;
+	}
+
+	/**/ if( 1 == port )
 	{
 
 	}
@@ -94,12 +150,18 @@ void ReceiveUartRx( uint8_t const dat , uint8_t const port )
 
 void TimIrq() // is called each 1 milliseconds
 {
+	if( false == runOp )
+	{
+		return ;
+	}
+
 	static uint16_t upCount = 0 ;
 
 	++upCount ;
-	if( 0 == ( upCount % 500 ) )
+
+	if( ( 0 != upCount ) && ( 0 == upCount % 250 ) )
 	{
-		led.ToggleDebugLed1() ;
+		liveIrq = true ;
 	}
 
 	if( 1000 <= upCount )
@@ -115,5 +177,6 @@ void HAL_GPIO_EXTI_Callback( uint16_t GPIO_Pin )
 	if( GPIO_Pin == daniel::nRF24L01::IRQ_Pin )
 	{
 		rf.Irq() ;
+		daniel::GPIO::ToggleEventLed() ;
 	}
 }

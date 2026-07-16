@@ -167,7 +167,7 @@ void SystemClock_Config(void)
 static void MX_NVIC_Init(void)
 {
   /* EXTI0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 1, 0);
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 }
 
@@ -227,7 +227,7 @@ static void MX_TIM6_Init(void)
 
   /* USER CODE END TIM6_Init 1 */
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 720-1;
+  htim6.Init.Prescaler = 700-1;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim6.Init.Period = 100-1;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -327,12 +327,12 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, DEBUG_LED3_Pin|DEBUG_LED2_Pin|DEBUG_LED1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, RX_MODE_LED_Pin|TX_MODE_LED_Pin|EVENT_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SPI1_CE_GPIO_Port, SPI1_CE_Pin, GPIO_PIN_RESET);
@@ -340,8 +340,14 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SPI1_CSN_GPIO_Port, SPI1_CSN_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : DEBUG_LED3_Pin DEBUG_LED2_Pin DEBUG_LED1_Pin */
-  GPIO_InitStruct.Pin = DEBUG_LED3_Pin|DEBUG_LED2_Pin|DEBUG_LED1_Pin;
+  /*Configure GPIO pin : OP_MODE_Pin */
+  GPIO_InitStruct.Pin = OP_MODE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(OP_MODE_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : RX_MODE_LED_Pin TX_MODE_LED_Pin EVENT_LED_Pin */
+  GPIO_InitStruct.Pin = RX_MODE_LED_Pin|TX_MODE_LED_Pin|EVENT_LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -387,11 +393,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
+  if( htim->Instance == TIM6 )
+  {
+	  TimIrq() ;
+  }
 
-	if( htim->Instance == TIM6 )
-	{
-		TimIrq() ;
-	}
   /* USER CODE END Callback 1 */
 }
 

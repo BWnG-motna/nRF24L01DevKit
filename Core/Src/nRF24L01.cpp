@@ -10,15 +10,29 @@
 
 
  GPIO_TypeDef * daniel::nRF24L01::IRQ_Port = reinterpret_cast< GPIO_TypeDef * >( GPIOB_BASE ) ;
-   char const * daniel::nRF24L01::errType[ 4 ] = { "HAL_OK" , "HAL_ERROR" , "HAL_BUSY" , "HAL_TIMEOUT" } ;
-uint8_t const   daniel::nRF24L01::rfAddr [ 5 ] = { 0x13 , 0xA3 , 0xB3 , 0xCD , 0xEE } ;
+   char const * daniel::nRF24L01::errType [ 4 ] = { "HAL_OK" , "HAL_ERROR" , "HAL_BUSY" , "HAL_TIMEOUT" } ;
+uint8_t const   daniel::nRF24L01::rfAddrP0[ 5 ] = { 0x13 , 0xA3 , 0xB3 , 0xCD , 0xEE } ;
+uint8_t const   daniel::nRF24L01::rfAddrP1[ 5 ] = { 0x13 , 0xA3 , 0xB3 , 0xCD , 0xEF } ;
+uint8_t const   daniel::nRF24L01::rfAddrP2      =  rfAddrP1[ 4 ] + 1 ;
+uint8_t const   daniel::nRF24L01::rfAddrP3      =  rfAddrP1[ 4 ] + 2 ;
+uint8_t const   daniel::nRF24L01::rfAddrP4      =  rfAddrP1[ 4 ] + 3 ;
 
 
-daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle )
-	: pHandle( _pHandle ) , isCS( false ) , pUart( nullptr ) , payloadSize( 32 ) , rfMode( RfMode::Unknown ) , leaveLog( true )
+daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLog )
+	: pHandle( _pHandle )   , isCS( false )     , pUart( nullptr ) , payloadSize( 32 ) , rfMode( RfMode::Unknown ) ,
+	  leaveLog( _leaveLog ) , debugLog( false ) , autoACK( true )
 {
 	SetCS( false ) ;
-	Log( "nRF24L01: created\r\n" ) ;
+	LogEvent( "nRF24L01: created\r\n" ) ;
+}
+
+
+daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , USART * _pUart , bool const & _leaveLog )
+	: pHandle( _pHandle )   , isCS( false )     , pUart( _pUart ) , payloadSize( 32 ) , rfMode( RfMode::Unknown ) ,
+	  leaveLog( _leaveLog ) , debugLog( false ) , autoACK( true )
+{
+	SetCS( false ) ;
+	LogEvent( "nRF24L01: created\r\n" ) ;
 }
 
 
@@ -41,7 +55,7 @@ void daniel::nRF24L01::SetCE( bool const & isEnable )
 
 void daniel::nRF24L01::Begin( RfMode const & mode )
 {
-	Log( "nRF24L01: Begin\r\n" ) ;
+	LogEvent( "nRF24L01: Begin\r\n" ) ;
 
 	rfMode = mode ;
 
@@ -59,7 +73,7 @@ void daniel::nRF24L01::Begin( RfMode const & mode )
 
 void daniel::nRF24L01::End()
 {
-	Log( "nRF24L01: End\r\n" ) ;
+	LogEvent( "nRF24L01: End\r\n" ) ;
 
 	PowerOnOff( nordic::type::OFF ) ;
 }
@@ -67,24 +81,29 @@ void daniel::nRF24L01::End()
 
 void daniel::nRF24L01::Init()
 {
-	Log( "nRF24L01: Init\r\n" ) ;
+	LogEvent( "nRF24L01: Init\r\n" ) ;
 	SetCS( true ) ;
 	SetCE( true ) ;
 
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
+	uint8_t enAA = ( true == autoACK ) ? 0x01 : 0x00 ;
+
 	AccessReg( TYPE::WRITE , REG::CONFIG      , 0x08 ) ; // enable CRC
-	AccessReg( TYPE::WRITE , REG::EN_AA       , 0x01 ) ; // enable AUTOACK for P0
+	AccessReg( TYPE::WRITE , REG::EN_AA       , enAA ) ; // enable AUTOACK for P0
 	AccessReg( TYPE::WRITE , REG::EN_RXADDR   , 0x3F ) ; // enable RX address for all data pipe
 	AccessReg( TYPE::WRITE , REG::SETUP_AW    , 0x03 ) ; // address field width( 5 )
 	AccessReg( TYPE::WRITE , REG::SETUP_RETR  , 0x03 ) ; // auto retransmit delay( 250us ) , retransmit count( 3 )
 	AccessReg( TYPE::WRITE , REG::RF_CH       , 0x4C ) ; // RF channel ( 76 )
 	AccessReg( TYPE::WRITE , REG::RF_SETUP    , 0x06 ) ; // data rates ( 1Mbps ) , RF output power( 0 dBm )
 	AccessReg( TYPE::WRITE , REG::RF_STATUS   , 0x7F ) ; // interrupt enabled for Rx and TX , RX FIFO empty, TX FIFO ready
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P0  , 0x05 , rfAddr ) ;
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x05 , rfAddr ) ;
-	AccessReg( TYPE::WRITE , REG::TX_ADDR     , 0x05 , rfAddr ) ;
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P0  , 0x05 ,   rfAddrP0 ) ;
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x05 ,   rfAddrP1 ) ;
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x01 , & rfAddrP2 ) ;
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P2  , 0x01 , & rfAddrP3 ) ;
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P3  , 0x01 , & rfAddrP4 ) ;
+	AccessReg( TYPE::WRITE , REG::TX_ADDR     , 0x05 ,   rfAddrP0 ) ;
 	AccessReg( TYPE::WRITE , REG::RX_PW_P0    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P1    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P2    , payloadSize ) ; // payload size
@@ -141,7 +160,7 @@ void daniel::nRF24L01::ShowSpecificValue()
 
 void daniel::nRF24L01::PowerOnOff( bool isOn )
 {
-	Log( "nRF24L01: PowerOnOff - [ %s ]\r\n" , ( true == isOn ) ? "true " : "false" ) ;
+	LogEvent( "nRF24L01: PowerOnOff - [ %s ]\r\n" , ( true == isOn ) ? "true " : "false" ) ;
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
@@ -178,20 +197,20 @@ uint8_t daniel::nRF24L01::PushToTxFifo( uint8_t * payload )
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		Log( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
 	}
 
 	spiRes = HAL_SPI_Transmit( pHandle , payload , payloadSize , spiTimeOut ) ;
 
 	SetCS( false ) ;
-#if 0
-	Log( "nRF24L01: PushToTxFifo - " ) ;
+
+	LogDebug( "nRF24L01: PushToTxFifo - " ) ;
 	for( uint8_t pos = 0 ; pos < payloadSize ; ++pos )
 	{
-		Log( "0x%02X " , payload[ pos ] ) ;
+		LogDebug( "0x%02X " , payload[ pos ] ) ;
 	}
-	Log( "\r\n" ) ;
-#endif
+	LogDebug( "\r\n" ) ;
+
 	return ret ;
 }
 
@@ -208,20 +227,20 @@ uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload )
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		Log( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
 	}
 
 	spiRes = HAL_SPI_Receive( pHandle , payload , payloadSize , spiTimeOut ) ;
 
 	SetCS( false ) ;
-#if 0
-	Log( "nRF24L01: PopFromRxFifo - " ) ;
+
+	LogEvent( "nRF24L01: PopFromRxFifo - " ) ;
 	for( uint8_t pos = 0 ; pos < payloadSize ; ++pos )
 	{
-		Log( "0x%02X " , payload[ pos ] ) ;
+		LogEvent( "0x%02X " , payload[ pos ] ) ;
 	}
-	Log( "\r\n" ) ;
-#endif
+	LogEvent( "\r\n" ) ;
+
 	return ret ;
 }
 
@@ -247,11 +266,12 @@ void daniel::nRF24L01::Receive ( uint8_t * payload )
 
 void daniel::nRF24L01::Transmit( uint8_t * payload )
 {
-	SetCE( true ) ;
+	SetCE( false ) ;
 
 	uint8_t res = PushToTxFifo( payload ) ;
 
-	HAL_Delay( 1 ) ;
+	SetCE( true  ) ;
+	DelayUS( 20 ) ;
 	SetCE( false ) ;
 
 	if( 0 != res )
@@ -276,7 +296,7 @@ uint8_t daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t const 
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		Log( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
 	}
 
 	uint8_t res = val ;
@@ -289,17 +309,17 @@ uint8_t daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t const 
 		spiRes = HAL_SPI_Transmit( pHandle , & res , 1 , spiTimeOut ) ;
 	}
 
-	Log( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - Q val[ 0x%02X ] - R val[ 0x%02X ]\r\n" , ( TYPE::READ == accessType ) ? "read " : "write" , reg , val , res ) ;
+	LogDebug( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - Q val[ 0x%02X ] - R val[ 0x%02X ]\r\n" , ( TYPE::READ == accessType ) ? "read " : "write" , reg , val , res ) ;
 
 	SetCS( false ) ;
 
 	if( HAL_OK != spiRes && TYPE::READ == accessType )
 	{
-		Log( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Receive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Receive()\r\n" , errType[ spiRes ] ) ;
 	}
 	else if( HAL_OK != spiRes && TYPE::WRITE == accessType )
 	{
-		Log( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
 	}
 
 	return res ;
@@ -321,7 +341,7 @@ uint8_t * daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t cons
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		Log( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
 	}
 
 	static uint8_t data[ 5 ] = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 } ;
@@ -341,31 +361,31 @@ uint8_t * daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t cons
 		spiRes = HAL_SPI_Transmit( pHandle , data , dataLen , spiTimeOut ) ;
 	}
 
-	Log( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - Q val[ " , ( TYPE::READ == accessType ) ? "read " : "write" , reg ) ;
+	LogDebug( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - Q val[ " , ( TYPE::READ == accessType ) ? "read " : "write" , reg ) ;
 
 	for( uint8_t pos = 0 ; pos < len ; ++pos )
 	{
-		Log( "0x%02X " , pVal[ pos ] ) ;
+		LogDebug( "0x%02X " , pVal[ pos ] ) ;
 	}
 
-	Log( "- R val[ " ) ;
+	LogDebug( "- R val[ " ) ;
 
 	for( uint8_t pos = 0 ; pos < dataLen ; ++pos )
 	{
-		Log( "0x%02X " , data[ pos ] ) ;
+		LogDebug( "0x%02X " , data[ pos ] ) ;
 	}
 
-	Log( "]\r\n" ) ;
+	LogDebug( "]\r\n" ) ;
 
 	SetCS( false ) ;
 
 	if( HAL_OK != spiRes && TYPE::READ == accessType )
 	{
-		Log( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Receive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Receive()\r\n" , errType[ spiRes ] ) ;
 	}
 	else if( HAL_OK != spiRes && TYPE::WRITE == accessType )
 	{
-		Log( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
 	}
 
 	return data ;
@@ -386,7 +406,7 @@ void daniel::nRF24L01::FlushFIFO( uint8_t const & mode )
 	namespace TYPE = nordic::type ;
 	namespace CMD  = nordic::cmd  ;
 
-	Log( "nRF24L01: FlushFIFO  - mode [ %s ]\r\n" , ( TYPE::RX == mode ) ? "FLUSH_RX" : "FLUSH_TX" ) ;
+	LogDebug( "nRF24L01: FlushFIFO  - mode [ %s ]\r\n" , ( TYPE::RX == mode ) ? "FLUSH_RX" : "FLUSH_TX" ) ;
 
 	uint8_t cmd = ( TYPE::RX == mode ) ? CMD::FLUSH_RX : CMD::FLUSH_TX ;
 	uint8_t ret = 0x00 ;
@@ -396,7 +416,7 @@ void daniel::nRF24L01::FlushFIFO( uint8_t const & mode )
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		Log( "nRF24L01: FlushFIFO  - mode [ %s ] - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , ( TYPE::RX == mode ) ? "FLUSH_RX" : "FLUSH_TX" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: FlushFIFO  - mode [ %s ] - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , ( TYPE::RX == mode ) ? "FLUSH_RX" : "FLUSH_TX" , errType[ spiRes ] ) ;
 	}
 
 	SetCS( false ) ;
@@ -409,14 +429,15 @@ void daniel::nRF24L01::SetUart( USART * _pUart )
 }
 
 
-void daniel::nRF24L01::Log( char const * const format , ... ) const
+void daniel::nRF24L01::LeaveLog( bool const & is )
 {
-	if( false == leaveLog )
-	{
-		return ;
-	}
+	leaveLog = is ;
+}
 
-	if( nullptr == pUart )
+
+void daniel::nRF24L01::LogEvent( char const * const format , ... ) const
+{
+	if( false == leaveLog || nullptr == pUart )
 	{
 		return ;
 	}
@@ -433,37 +454,71 @@ void daniel::nRF24L01::Log( char const * const format , ... ) const
 }
 
 
-void daniel::nRF24L01::Irq()
+void daniel::nRF24L01::LogDebug( char const * const format , ... ) const
 {
-	( RfMode::TX == rfMode ) ? IrqTx() : IrqRx() ;
+	if( false == debugLog || nullptr == pUart )
+	{
+		return ;
+	}
+
+	static char szBuf[ 1024 ] ;
+
+	va_list args ;
+	va_start( args , format ) ;
+	vsprintf( szBuf , format , args ) ;
+
+	pUart->SendMessage( ( uint8_t * ) szBuf , strlen( szBuf ) ) ;
+
+	va_end( args ) ;
 }
 
 
-void daniel::nRF24L01::IrqTx()
+int8_t daniel::nRF24L01::Irq()
+{
+	int8_t res = ( RfMode::TX == rfMode ) ? IrqTx() : IrqRx() ;
+
+	return res ;
+}
+
+
+int8_t daniel::nRF24L01::IrqTx()
 {
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
 	uint8_t status = AccessReg( TYPE::READ , REG::RF_STATUS ) ;
 
-	if( status & 0x20 )
+	uint8_t res = 0x00 ;
+
+	/**/ if( status & 0x20 )
 	{
 		HAL_GPIO_TogglePin( IRQ_Port , IRQ_Pin ) ;
 		status = status | 0x20 ;
+
+		res = 1 ;
+		LogDebug( "IrqTx() - Transmit success ( TX_DS )\r\n" , status ) ;
+	}
+	else if( status & 0x10 )
+	{
+		status = status | 0x10 ;
+		FlushFIFO( TYPE::TX ) ;
+
+		res = 0 ;
+		LogDebug( "IrqTx() - Transmit failed ( MAX_RT ) - AutoACK is %s\r\n" , ( ( true == autoACK ) ? "enabled" : "disabled" ) ) ;
 	}
 	else
 	{
-		HAL_GPIO_WritePin ( IRQ_Port , IRQ_Pin , GPIO_PIN_SET ) ;
-		status = status | 0x10 ;
+		res = -1 ;
+		LogEvent( "IrqTx() - Transmit IRQ but unknown status 0x%02X\r\n" , status ) ;
 	}
 
 	AccessReg( TYPE::WRITE , REG::RF_STATUS , status ) ;
 
-	FlushFIFO( TYPE::TX ) ;
+	return res ;
 }
 
 
-void daniel::nRF24L01::IrqRx()
+int8_t daniel::nRF24L01::IrqRx()
 {
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
@@ -476,4 +531,44 @@ void daniel::nRF24L01::IrqRx()
 	AccessReg( TYPE::WRITE , REG::RF_STATUS , status ) ;
 
 	FlushFIFO( TYPE::RX ) ;
+
+	LogDebug( "IrqRx() - Receive success\r\n" , status ) ;
+
+	return 1 ;
+}
+
+
+void daniel::nRF24L01::DelayUS( uint16_t const & us )
+{
+	if( 0 == us )
+	{
+		return ;
+	}
+
+	uint16_t const msec = us / 1000 ;
+	uint16_t const usec = us % 1000 ;
+
+	if( 0U < msec )
+	{
+		HAL_Delay( msec ) ;
+	}
+
+	if( 0 == usec )
+	{
+		return ;
+	}
+
+	// SYSCLK --> 72MHz --> 1us --> about 9 loops
+	uint32_t loops = usec * 9U ;
+
+	__asm__ volatile (
+		"1: \n\t"
+		"   nop \n\t"
+		"   nop \n\t"
+		"   subs %0, %0, #1 \n\t"
+		"   bne 1b \n\t"
+		: "+r" ( loops )
+		:
+		: "cc", "memory"
+	) ;
 }
