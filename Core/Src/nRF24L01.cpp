@@ -160,7 +160,8 @@ void daniel::nRF24L01::ShowSpecificValue()
 
 void daniel::nRF24L01::PowerOnOff( bool isOn )
 {
-	LogEvent( "nRF24L01: PowerOnOff - [ %s ]\r\n" , ( true == isOn ) ? "true " : "false" ) ;
+	LogEvent( "nRF24L01: PowerOnOff    - [ %s ]\r\n" , ( true == isOn ) ? "true " : "false" ) ;
+
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
@@ -197,21 +198,29 @@ uint8_t daniel::nRF24L01::PushToTxFifo( uint8_t * payload )
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: PushToTxFifo  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
 	}
 
 	spiRes = HAL_SPI_Transmit( pHandle , payload , payloadSize , spiTimeOut ) ;
+	if( HAL_OK != spiRes )
+	{
+		LogEvent( "nRF24L01: PushToTxFifo  - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
+	}
 
 	SetCS( false ) ;
 
-	LogDebug( "nRF24L01: PushToTxFifo - " ) ;
+	LogDebug( "nRF24L01: PushToTxFifo  - " ) ;
 	for( uint8_t pos = 0 ; pos < payloadSize ; ++pos )
 	{
 		LogDebug( "0x%02X " , payload[ pos ] ) ;
 	}
 	LogDebug( "\r\n" ) ;
 
-	return ret ;
+	return 0x01 ;
 }
 
 
@@ -227,19 +236,21 @@ uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload )
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
 	}
 
 	spiRes = HAL_SPI_Receive( pHandle , payload , payloadSize , spiTimeOut ) ;
 
 	SetCS( false ) ;
 
-	LogEvent( "nRF24L01: PopFromRxFifo - " ) ;
+	LogDebug( "nRF24L01: PopFromRxFifo - " ) ;
 	for( uint8_t pos = 0 ; pos < payloadSize ; ++pos )
 	{
-		LogEvent( "0x%02X " , payload[ pos ] ) ;
+		LogDebug( "0x%02X " , payload[ pos ] ) ;
 	}
-	LogEvent( "\r\n" ) ;
+	LogDebug( "\r\n" ) ;
 
 	return ret ;
 }
@@ -296,7 +307,9 @@ uint8_t daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t const 
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg     - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
 	}
 
 	uint8_t res = val ;
@@ -309,18 +322,22 @@ uint8_t daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t const 
 		spiRes = HAL_SPI_Transmit( pHandle , & res , 1 , spiTimeOut ) ;
 	}
 
-	LogDebug( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - Q val[ 0x%02X ] - R val[ 0x%02X ]\r\n" , ( TYPE::READ == accessType ) ? "read " : "write" , reg , val , res ) ;
-
-	SetCS( false ) ;
-
-	if( HAL_OK != spiRes && TYPE::READ == accessType )
+	/**/ if( HAL_OK != spiRes && TYPE::READ == accessType )
 	{
-		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Receive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg     - [ %s ] - error - HAL_SPI_Receive()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
 	}
 	else if( HAL_OK != spiRes && TYPE::WRITE == accessType )
 	{
-		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg     - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
 	}
+
+	LogDebug( "nRF24L01: AccessReg     - type [ %s ] - reg [ 0x%02X ] - Q val[ 0x%02X ] - R val[ 0x%02X ]\r\n" , ( TYPE::READ == accessType ) ? "read " : "write" , reg , val , res ) ;
+
+	SetCS( false ) ;
 
 	return res ;
 }
@@ -341,7 +358,9 @@ uint8_t * daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t cons
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: AccessReg     - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return nullptr ;
 	}
 
 	static uint8_t data[ 5 ] = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 } ;
@@ -361,7 +380,20 @@ uint8_t * daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t cons
 		spiRes = HAL_SPI_Transmit( pHandle , data , dataLen , spiTimeOut ) ;
 	}
 
-	LogDebug( "nRF24L01: AccessReg  - type [ %s ] - reg [ 0x%02X ] - Q val[ " , ( TYPE::READ == accessType ) ? "read " : "write" , reg ) ;
+	/**/ if( HAL_OK != spiRes && TYPE::READ == accessType )
+	{
+		LogEvent( "nRF24L01: AccessReg     - [ %s ] - error - HAL_SPI_Receive()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return nullptr ;
+	}
+	else if( HAL_OK != spiRes && TYPE::WRITE == accessType )
+	{
+		LogEvent( "nRF24L01: AccessReg     - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return nullptr ;
+	}
+
+	LogDebug( "nRF24L01: AccessReg     - type [ %s ] - reg [ 0x%02X ] - Q val[ " , ( TYPE::READ == accessType ) ? "read " : "write" , reg ) ;
 
 	for( uint8_t pos = 0 ; pos < len ; ++pos )
 	{
@@ -378,15 +410,6 @@ uint8_t * daniel::nRF24L01::AccessReg( uint8_t const & accessType , uint8_t cons
 	LogDebug( "]\r\n" ) ;
 
 	SetCS( false ) ;
-
-	if( HAL_OK != spiRes && TYPE::READ == accessType )
-	{
-		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Receive()\r\n" , errType[ spiRes ] ) ;
-	}
-	else if( HAL_OK != spiRes && TYPE::WRITE == accessType )
-	{
-		LogEvent( "nRF24L01: AccessReg  - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
-	}
 
 	return data ;
 }
@@ -406,7 +429,7 @@ void daniel::nRF24L01::FlushFIFO( uint8_t const & mode )
 	namespace TYPE = nordic::type ;
 	namespace CMD  = nordic::cmd  ;
 
-	LogDebug( "nRF24L01: FlushFIFO  - mode [ %s ]\r\n" , ( TYPE::RX == mode ) ? "FLUSH_RX" : "FLUSH_TX" ) ;
+	LogDebug( "nRF24L01: FlushFIFO     - mode [ %s ]\r\n" , ( TYPE::RX == mode ) ? "FLUSH_RX" : "FLUSH_TX" ) ;
 
 	uint8_t cmd = ( TYPE::RX == mode ) ? CMD::FLUSH_RX : CMD::FLUSH_TX ;
 	uint8_t ret = 0x00 ;
@@ -416,7 +439,7 @@ void daniel::nRF24L01::FlushFIFO( uint8_t const & mode )
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		LogEvent( "nRF24L01: FlushFIFO  - mode [ %s ] - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , ( TYPE::RX == mode ) ? "FLUSH_RX" : "FLUSH_TX" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: FlushFIFO     - mode [ %s ] - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , ( TYPE::RX == mode ) ? "FLUSH_RX" : "FLUSH_TX" , errType[ spiRes ] ) ;
 	}
 
 	SetCS( false ) ;
@@ -496,7 +519,7 @@ int8_t daniel::nRF24L01::IrqTx()
 		status = status | 0x20 ;
 
 		res = 1 ;
-		LogDebug( "IrqTx() - Transmit success ( TX_DS )\r\n" , status ) ;
+		LogDebug( "nRF24L01: IrqTx         - Transmit success ( TX_DS )\r\n" , status ) ;
 	}
 	else if( status & 0x10 )
 	{
@@ -504,12 +527,12 @@ int8_t daniel::nRF24L01::IrqTx()
 		FlushFIFO( TYPE::TX ) ;
 
 		res = 0 ;
-		LogDebug( "IrqTx() - Transmit failed ( MAX_RT ) - AutoACK is %s\r\n" , ( ( true == autoACK ) ? "enabled" : "disabled" ) ) ;
+		LogDebug( "nRF24L01: IrqTx         - Transmit failed ( MAX_RT ) - AutoACK is %s\r\n" , ( ( true == autoACK ) ? "enabled" : "disabled" ) ) ;
 	}
 	else
 	{
 		res = -1 ;
-		LogEvent( "IrqTx() - Transmit IRQ but unknown status 0x%02X\r\n" , status ) ;
+		LogEvent( "nRF24L01: IrqTx         - Transmit IRQ but unknown status 0x%02X\r\n" , status ) ;
 	}
 
 	AccessReg( TYPE::WRITE , REG::RF_STATUS , status ) ;
@@ -532,7 +555,7 @@ int8_t daniel::nRF24L01::IrqRx()
 
 	FlushFIFO( TYPE::RX ) ;
 
-	LogDebug( "IrqRx() - Receive success\r\n" , status ) ;
+	LogDebug( "nRF24L01: IrqRx         - Receive success\r\n" , status ) ;
 
 	return 1 ;
 }
