@@ -41,8 +41,7 @@ daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , USART * _pUart , bool
 void daniel::nRF24L01::SetCS( bool const & isEnable )
 {
 	// CSN signal
-	// RX mode - CS must be always enabled
-	// TX mode - CS must be enabled during sending data, otherwise, must be disabled
+	// CSN must be enabled ( low ) during SPI communication
 	isCS = isEnable ;
 	HAL_GPIO_WritePin( GPIOC , GPIO_PIN_5 , ( true == isEnable ) ? GPIO_PIN_RESET : GPIO_PIN_SET ) ;
 }
@@ -51,7 +50,8 @@ void daniel::nRF24L01::SetCS( bool const & isEnable )
 void daniel::nRF24L01::SetCE( bool const & isEnable )
 {
 	// CE signal
-	// CE must be enabled during SPI communication
+	// RX mode - CE must be always enabled ( high )
+	// TX mode - CE must be enabled during sending data ( pulse or hold ) , otherwise, must be disabled
 	isCE = isEnable ;
 	HAL_GPIO_WritePin( GPIOC , GPIO_PIN_4 , ( true == isEnable ) ? GPIO_PIN_SET : GPIO_PIN_RESET ) ;
 }
@@ -298,18 +298,13 @@ uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload )
 	}
 	LogDebug( "\r\n" ) ;
 
-	return ret ;
+	return 0x01 ;
 }
 
 
-void daniel::nRF24L01::Receive ( uint8_t * payload )
+uint8_t daniel::nRF24L01::Receive( uint8_t * payload )
 {
 	uint8_t res = PopFromRxFifo( payload ) ;
-
-	if( 0 != res )
-	{
-
-	}
 
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
@@ -318,10 +313,12 @@ void daniel::nRF24L01::Receive ( uint8_t * payload )
 	uint8_t confVal = val | 0x40 ;
 
 	val = AccessReg( TYPE::WRITE , REG::RF_STATUS , confVal ) ;
+
+	return res ;
 }
 
 
-void daniel::nRF24L01::Transmit( uint8_t * payload )
+uint8_t daniel::nRF24L01::Transmit( uint8_t * payload )
 {
 	SetCE( false ) ;
 
@@ -331,10 +328,7 @@ void daniel::nRF24L01::Transmit( uint8_t * payload )
 	DelayUS( 20 ) ;
 	SetCE( false ) ;
 
-	if( 0 != res )
-	{
-
-	}
+	return res ;
 }
 
 
@@ -592,7 +586,7 @@ int8_t daniel::nRF24L01::IrqRx()
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
-	Receive( recvData ) ;
+	uint8_t res = Receive( recvData ) ;
 
 	uint8_t status = AccessReg( TYPE::READ , REG::RF_STATUS ) ;
 	status = status | 0x40 ;
@@ -603,7 +597,7 @@ int8_t daniel::nRF24L01::IrqRx()
 
 	LogDebug( "nRF24L01: IrqRx         - Receive success\r\n" , status ) ;
 
-	return 1 ;
+	return res ;
 }
 
 

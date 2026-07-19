@@ -105,8 +105,10 @@ public :
 	void LeaveLog( bool const & is ) ;
 
 public :
-	void Receive ( uint8_t * payload ) ;
-	void Transmit( uint8_t * payload ) ;
+	uint8_t Receive ( uint8_t * payload ) ;
+	uint8_t Transmit( uint8_t * payload ) ;
+
+public :
 	void ShowSpecificValue() ;
 
 public :
