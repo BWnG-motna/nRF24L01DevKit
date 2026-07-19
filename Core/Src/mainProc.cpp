@@ -15,11 +15,14 @@
 
 extern UART_HandleTypeDef huart1 ;
 extern UART_HandleTypeDef huart3 ;
+extern UART_HandleTypeDef huart4 ;
+
 extern TIM_HandleTypeDef  htim6 ;
 extern SPI_HandleTypeDef  hspi1 ;
 
-daniel::USART    uart1( & huart1 ) ;
-daniel::USART    uart3( & huart3 ) ;
+daniel::USART    uart1( & huart1 ) ; // on USB
+daniel::USART    uart3( & huart3 ) ; // pin header H1
+daniel::USART    uart4( & huart4 ) ; // pin header H2
 daniel::nRF24L01 rf( & hspi1 ) ;
 
 static bool oneSecIrq = false ;
@@ -142,6 +145,10 @@ void ReceiveUartRx( uint8_t const dat , uint8_t const port )
 
 	}
 	else if( 3 == port )
+	{
+
+	}
+	else if( 4 == port )
 	{
 
 	}
