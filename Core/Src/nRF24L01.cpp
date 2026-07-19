@@ -306,6 +306,7 @@ uint8_t daniel::nRF24L01::Receive( uint8_t * payload )
 {
 	uint8_t res = PopFromRxFifo( payload ) ;
 
+#if 0
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
@@ -313,6 +314,7 @@ uint8_t daniel::nRF24L01::Receive( uint8_t * payload )
 	uint8_t confVal = val | 0x40 ;
 
 	val = AccessReg( TYPE::WRITE , REG::RF_STATUS , confVal ) ;
+#endif
 
 	return res ;
 }
@@ -586,14 +588,30 @@ int8_t daniel::nRF24L01::IrqRx()
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
-	uint8_t res = Receive( recvData ) ;
+	uint8_t res = 0x00 ;
+
+	while( true )
+	{
+		uint8_t fifoStatus = AccessReg( TYPE::READ , REG::FIFO_STATUS ) ;
+		if( 0 != ( 0x01 & fifoStatus ) )
+		{
+			break ;
+		}
+
+		uint8_t res = Receive( recvData ) ;
+		if( 0 == res )
+		{
+			break ;
+			// error handling
+		}
+
+		// processing with recvData
+	}
 
 	uint8_t status = AccessReg( TYPE::READ , REG::RF_STATUS ) ;
 	status = status | 0x40 ;
 
 	AccessReg( TYPE::WRITE , REG::RF_STATUS , status ) ;
-
-	FlushFIFO( TYPE::RX ) ;
 
 	LogDebug( "nRF24L01: IrqRx         - Receive success\r\n" , status ) ;
 
