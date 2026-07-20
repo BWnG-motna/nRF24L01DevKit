@@ -56,4 +56,4 @@ public :
 
 } ; // class USART
 
-} // namespace daniel
+}   // namespace daniel

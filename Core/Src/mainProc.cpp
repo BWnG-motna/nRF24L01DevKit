@@ -25,12 +25,12 @@ daniel::USART    uart3( & huart3 ) ; // pin header H1
 daniel::USART    uart4( & huart4 ) ; // pin header H2
 daniel::nRF24L01 rf( & hspi1 ) ;
 
-static bool oneSecIrq = false ;
-static bool liveIrq   = false ;
-static bool runOp     = false ;
+volatile static bool oneSecIrq = false ;
+volatile static bool liveIrq   = false ;
+volatile static bool runOp     = false ;
 
 
-#define DIPSW_IS_EXISTED ( 1 )
+#define DIPSW_IS_EXISTED ( 0 )
 
 
 void MainProc()
@@ -83,6 +83,8 @@ void MainProc()
 
 	while( true )
 	{
+		rfMode = rf.GetRfMode() ;
+
 		if( true == oneSecIrq )
 		{
 			if( daniel::RfMode::TX == rfMode )

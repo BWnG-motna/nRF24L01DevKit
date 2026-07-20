@@ -33,7 +33,6 @@ private :
 
 private :
 	uint8_t payloadSize ;
-	uint8_t recvData[ 32 ] ;
 
 private :
 	static    char const * errType [ 4 ] ;
@@ -110,6 +109,7 @@ public :
 
 public :
 	void ShowSpecificValue() ;
+	RfMode GetRfMode() const ;
 
 public :
 	void Begin( RfMode const & mode ) ;

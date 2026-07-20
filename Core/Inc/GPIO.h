@@ -1,5 +1,5 @@
 /*
- * LEDs.h
+ * GPIO.h
  *
  *  Created on: Sep 15, 2025
  *      Author: yukinpl
@@ -26,6 +26,6 @@ public :
 
 	static bool GetOpMode() ;
 
-} ;
+} ; // class GPIO
 
-} // daniel
+}   // namespace daniel

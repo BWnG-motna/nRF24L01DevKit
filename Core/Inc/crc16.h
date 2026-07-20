@@ -20,6 +20,7 @@ private :
 
 public :
 	static uint16_t ComputeCRC16( uint8_t const * pDat , uint16_t const & length ) ;
-} ;
 
-}
+} ; // class CRC16
+
+}   // namespace daniel
