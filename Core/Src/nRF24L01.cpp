@@ -27,7 +27,7 @@ daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLo
 {
 	SetCS( false ) ;
 
-	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	for( uint8_t pos = 0 ; pos < RfPipeCnt ; ++pos )
 	{
 		rfPipe[ pos ] = false ;
 	}
@@ -46,7 +46,7 @@ daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , USART * _pUart , bool
 {
 	SetCS( false ) ;
 
-	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	for( uint8_t pos = 0 ; pos < RfPipeCnt ; ++pos )
 	{
 		rfPipe[ pos ] = false ;
 	}
@@ -80,8 +80,6 @@ void daniel::nRF24L01::Begin( RfMode const & mode )
 {
 	LogEvent( "nRF24L01: Begin\r\n" ) ;
 
-	rfMode = mode ;
-
 	Init() ;
 	SetRfMode( mode ) ;
 	PowerOnOff( nordic::type::ON ) ;
@@ -104,10 +102,10 @@ void daniel::nRF24L01::End()
 
 void daniel::nRF24L01::SetChannel( uint8_t const & ch )
 {
-	rfChannel = ( 125 < ch ) ? 125 : ch ;
-
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg ;
+
+	rfChannel = ( 125 < ch ) ? 125 : ch ;
 
 	bool wasCE = isCE ;
 
@@ -160,10 +158,10 @@ bool daniel::nRF24L01::Scan( bool channel[ 126 ] )
 
 void daniel::nRF24L01::SetARD( RfARD const & ard )
 {
-	rfARD = ard ;
-
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg ;
+
+	rfARD = ard ;
 
 	bool wasCE = isCE ;
 
@@ -181,10 +179,10 @@ void daniel::nRF24L01::SetARD( RfARD const & ard )
 
 void daniel::nRF24L01::SetARC( uint8_t const & arc )
 {
-	rfARC = ( 15 < arc ) ? 15 : arc ;
-
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg ;
+
+	rfARC = ( 15 < arc ) ? 15 : arc ;
 
 	bool wasCE = isCE ;
 
@@ -201,15 +199,16 @@ void daniel::nRF24L01::SetARC( uint8_t const & arc )
 
 void daniel::nRF24L01::SetRxPipe( uint8_t const & pipeNo , bool const & is )
 {
-	if( 0 == pipeNo || 5 < pipeNo )
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg ;
+
+
+	if( 0 == pipeNo || RfPipeCnt <= pipeNo )
 	{
 		return ;
 	}
 
 	rfPipe[ pipeNo ] = is ;
-
-	namespace TYPE = nordic::type ;
-	namespace REG  = nordic::reg ;
 
 	bool wasCE = isCE ;
 
@@ -260,12 +259,13 @@ void daniel::nRF24L01::SetRxPipe5( bool const & is )
 
 void daniel::nRF24L01::Init()
 {
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg  ;
+
+
 	LogEvent( "nRF24L01: Init\r\n" ) ;
 	SetCS( true ) ;
 	SetCE( true ) ;
-
-	namespace TYPE = nordic::type ;
-	namespace REG  = nordic::reg  ;
 
 	uint8_t enAA      = GetEnAA() ;
 	uint8_t enRxAddr  = GetEnRxAddr() ;
@@ -309,7 +309,7 @@ uint8_t daniel::nRF24L01::GetEnAA() const
 {
 	uint8_t res = 0x00 ;
 
-	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	for( uint8_t pos = 0 ; pos < RfPipeCnt ; ++pos )
 	{
 		res |= ( true == rfPipe[ pos ] ) ? ( 0x01 << pos ) : 0x00 ;
 	}
@@ -322,7 +322,7 @@ uint8_t daniel::nRF24L01::GetEnRxAddr() const
 {
 	uint8_t res = 0x00 ;
 
-	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	for( uint8_t pos = 0 ; pos < RfPipeCnt ; ++pos )
 	{
 		res |= ( true == rfPipe[ pos ] ) ? ( 0x01 << pos ) : 0x00 ;
 	}
@@ -348,7 +348,7 @@ uint8_t daniel::nRF24L01::GetDynPd() const
 {
 	uint8_t res = 0x00 ;
 
-	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	for( uint8_t pos = 0 ; pos < RfPipeCnt ; ++pos )
 	{
 		res |= ( true == rfPipe[ pos ] ) ? ( 0x01 << pos ) : 0x00 ;
 	}
@@ -419,16 +419,25 @@ void daniel::nRF24L01::ShowSpecificValue()
 
 void daniel::nRF24L01::PowerOnOff( bool isOn )
 {
-	LogEvent( "nRF24L01: PowerOnOff    - [ %s ]\r\n" , ( true == isOn ) ? "true " : "false" ) ;
-
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
+
+
+	LogEvent( "nRF24L01: PowerOnOff    - [ %s ]\r\n" , ( true == isOn ) ? "true " : "false" ) ;
+
+	bool wasCE = isCE ;
+	SetCE( false ) ;
 
 	uint8_t conf = AccessReg( TYPE::READ , REG::CONFIG ) ;
 
 	conf = ( true == isOn ) ? ( conf | 0x02 ) : ( conf & 0xFD ) ;
 
 	AccessReg( TYPE::WRITE , REG::CONFIG , conf ) ;
+
+	if( true == wasCE )
+	{
+		SetCE( true ) ;
+	}
 }
 
 
@@ -437,11 +446,20 @@ void daniel::nRF24L01::SetRfMode( RfMode const & mode )
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
-	uint8_t val = AccessReg( TYPE::READ  , REG::CONFIG ) ;
+	bool wasCE = isCE ;
+	SetCE( false ) ;
 
-	uint8_t confVal = ( RfMode::RX == mode ) ? ( val | 0x01 ) : ( val & 0xFE ) ;
+	rfMode = mode ;
+
+	uint8_t val     = AccessReg( TYPE::READ  , REG::CONFIG ) ;
+	uint8_t confVal = ( RfMode::RX == rfMode ) ? ( val | 0x01 ) : ( val & 0xFE ) ;
 
 	AccessReg( TYPE::WRITE , REG::CONFIG , confVal ) ;
+
+	if( true == wasCE || RfMode::RX == rfMode )
+	{
+		SetCE( true ) ;
+	}
 }
 
 
@@ -501,7 +519,6 @@ uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload , uint8_t & length )
 
 	namespace CMD  = nordic::cmd  ;
 	namespace TYPE = nordic::type ;
-
 
 	uint8_t cmd = CMD::R_RX_PL_WID ;
 	uint8_t ret = 0x00 ;
@@ -575,6 +592,7 @@ uint8_t daniel::nRF24L01::Receive( uint8_t * payload , uint8_t & length )
 	{
 		return 0 ;
 	}
+
 
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
@@ -866,6 +884,7 @@ int8_t daniel::nRF24L01::IrqRx()
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
+
 	uint8_t res = 0x00 ;
 
 	while( true )
@@ -878,8 +897,6 @@ int8_t daniel::nRF24L01::IrqRx()
 		{
 			break ;
 		}
-
-
 	}
 
 	uint8_t status = AccessReg( TYPE::READ , REG::RF_STATUS ) ;

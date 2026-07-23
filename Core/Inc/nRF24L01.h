@@ -67,7 +67,8 @@ private :
 	uint8_t    rfARC ;
 
 private :
-	bool rfPipe[ 6 ] ;
+	static constexpr uint8_t RfPipeCnt = 6 ;
+	bool rfPipe[ RfPipeCnt ] ;
 
 private :
 	void Init() ;
