@@ -3,6 +3,7 @@
 #include "common.h"
 #include "usart.h"
 
+#include "RfARD.h"
 #include "RfMode.h"
 #include "RfPower.h"
 #include "RfLnaGain.h"
@@ -55,10 +56,14 @@ private :
 	uint8_t    rfChannel ;
 
 private :
+	RfARD      rfARD ;
 	RfMode     rfMode ;
 	RfPower    rfPower ;
 	RfLnaGain  rfLnaGain ;
 	RfDataRate rfDataRate ;
+
+private :
+	uint8_t    rfARC ;
 
 private :
 	void Init() ;
@@ -78,6 +83,7 @@ private :
 
 	void SetRfMode( RfMode const & mode ) ;
 
+	uint8_t GetSetupRetr()  const ;
 	uint8_t GetRfSetupVal() const ;
 	uint8_t PushToTxFifo ( uint8_t * payload ) ;
 	uint8_t PopFromRxFifo( uint8_t * payload ) ;
@@ -102,6 +108,10 @@ public :
 public :
 	void SetUart( USART * _pUart ) ;
 	void LeaveLog( bool const & is ) ;
+
+public :
+	void SetARD( RfARD   const & ard ) ;
+	void SetARC( uint8_t const & arc ) ;
 
 public :
 	uint8_t Receive ( uint8_t * payload ) ;

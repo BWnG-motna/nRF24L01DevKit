@@ -45,7 +45,7 @@ void MainProc()
 
 #else
 
-	daniel::RfMode rfMode = daniel::RfMode::RX ;
+	daniel::RfMode rfMode = daniel::RfMode::TX ;
 
 #endif
 

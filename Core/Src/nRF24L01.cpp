@@ -19,9 +19,10 @@ uint8_t const   daniel::nRF24L01::rfAddrP4      =  rfAddrP1[ 4 ] + 3 ;
 
 
 daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLog )
-	: pHandle( _pHandle )       , isCS( false )     , isCE( false )    , pUart( nullptr ) , payloadSize( 32 ) ,
-	  leaveLog( _leaveLog )     , debugLog( false ) , autoACK( true )  , rfChannel( 0x4C ) ,
-	  rfMode( RfMode::Unknown ) , rfPower( RfPower::Power_0dBm )       , rfLnaGain( RfLnaGain::High ) , rfDataRate( RfDataRate::Rate_1Mbps )
+	: pHandle( _pHandle )         , isCS( false )     , isCE( false )    , pUart( nullptr )    , payloadSize( 32 ) ,
+	  leaveLog( _leaveLog )       , debugLog( false ) , autoACK( true )  , rfChannel( 0x4C )   ,
+	  rfARD( RfARD::Delay_250us ) , rfMode( RfMode::Unknown ) , rfPower( RfPower::Power_0dBm ) , rfLnaGain( RfLnaGain::High ) , rfDataRate( RfDataRate::Rate_1Mbps ) ,
+      rfARC( 3 )
 {
 	SetCS( false ) ;
 	LogEvent( "nRF24L01: created\r\n" ) ;
@@ -29,9 +30,10 @@ daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLo
 
 
 daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , USART * _pUart , bool const & _leaveLog )
-	: pHandle( _pHandle )       , isCS( false )     , isCE( false )   , pUart( _pUart ) , payloadSize( 32 ) ,
-	  leaveLog( _leaveLog )     , debugLog( false ) , autoACK( true ) , rfChannel( 0x4C ) ,
-	  rfMode( RfMode::Unknown ) , rfPower( RfPower::Power_0dBm )      , rfLnaGain( RfLnaGain::High ) , rfDataRate( RfDataRate::Rate_1Mbps )
+	: pHandle( _pHandle )         , isCS( false )     , isCE( false )    , pUart( _pUart )     , payloadSize( 32 ) ,
+	  leaveLog( _leaveLog )       , debugLog( false ) , autoACK( true )  , rfChannel( 0x4C )   ,
+	  rfARD( RfARD::Delay_250us ) , rfMode( RfMode::Unknown ) , rfPower( RfPower::Power_0dBm ) , rfLnaGain( RfLnaGain::High ) , rfDataRate( RfDataRate::Rate_1Mbps ) ,
+	  rfARC( 3 )
 {
 	SetCS( false ) ;
 	LogEvent( "nRF24L01: created\r\n" ) ;
@@ -102,6 +104,48 @@ void daniel::nRF24L01::SetChannel( uint8_t const & ch )
 }
 
 
+void daniel::nRF24L01::SetARD( RfARD const & ard )
+{
+	rfARD = ard ;
+
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg ;
+
+	bool wasCE = isCE ;
+
+	uint8_t setupRetrVal = GetSetupRetr() ;
+
+	SetCE( false ) ;
+	AccessReg( TYPE::WRITE , REG::SETUP_RETR , setupRetrVal ) ;
+
+	if( true == wasCE || RfMode::RX == rfMode )
+	{
+		SetCE( true ) ;
+	}
+}
+
+
+void daniel::nRF24L01::SetARC( uint8_t const & arc )
+{
+	rfARC = ( 15 < arc ) ? 15 : arc ;
+
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg ;
+
+	bool wasCE = isCE ;
+
+	uint8_t setupRetrVal = GetSetupRetr() ;
+
+	SetCE( false ) ;
+	AccessReg( TYPE::WRITE , REG::SETUP_RETR , setupRetrVal ) ;
+
+	if( true == wasCE || RfMode::RX == rfMode )
+	{
+		SetCE( true ) ;
+	}
+}
+
+
 void daniel::nRF24L01::Init()
 {
 	LogEvent( "nRF24L01: Init\r\n" ) ;
@@ -111,18 +155,19 @@ void daniel::nRF24L01::Init()
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
-	uint8_t enAA    = ( true == autoACK ) ? 0x01 : 0x00 ;
-	uint8_t rfSetup = GetRfSetupVal() ;
-	uint8_t ch      = ( 125 < rfChannel ) ? 125 : rfChannel ;
+	uint8_t enAA      = ( true == autoACK ) ? 0x01 : 0x00 ;
+	uint8_t setupRetr = GetSetupRetr() ;
+	uint8_t rfSetup   = GetRfSetupVal() ;
+	uint8_t ch        = ( 125 < rfChannel ) ? 125 : rfChannel ;
 
 	AccessReg( TYPE::WRITE , REG::CONFIG      , 0x08 ) ; // enable CRC
 	AccessReg( TYPE::WRITE , REG::EN_AA       , enAA ) ; // enable AUTOACK for P0
 	AccessReg( TYPE::WRITE , REG::EN_RXADDR   , 0x3F ) ; // enable RX address for all data pipe
 	AccessReg( TYPE::WRITE , REG::SETUP_AW    , 0x03 ) ; // address field width( 5 )
-	AccessReg( TYPE::WRITE , REG::SETUP_RETR  , 0x03 ) ; // auto retransmit delay( 250us ) , retransmit count( 3 )
-	AccessReg( TYPE::WRITE , REG::RF_CH       , ch      ) ; // RF channel
-	AccessReg( TYPE::WRITE , REG::RF_SETUP    , rfSetup ) ; // data rates and RF output power
-	AccessReg( TYPE::WRITE , REG::RF_STATUS   , 0x7F    ) ; // interrupt enabled for Rx and TX , RX FIFO empty, TX FIFO ready
+	AccessReg( TYPE::WRITE , REG::SETUP_RETR  , setupRetr ) ; // auto retransmit delay , retransmit count
+	AccessReg( TYPE::WRITE , REG::RF_CH       , ch        ) ; // RF channel
+	AccessReg( TYPE::WRITE , REG::RF_SETUP    , rfSetup   ) ; // data rates and RF output power
+	AccessReg( TYPE::WRITE , REG::RF_STATUS   , 0x7F      ) ; // interrupt enabled for Rx and TX , RX FIFO empty, TX FIFO ready
 	AccessReg( TYPE::WRITE , REG::RX_ADDR_P0  , 0x05 ,   rfAddrP0 ) ; // Rx Address - pipe 0
 	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x05 ,   rfAddrP1 ) ; // Rx Address - pipe 1
 	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x01 , & rfAddrP2 ) ; // Rx Address - pipe 2
@@ -142,6 +187,19 @@ void daniel::nRF24L01::Init()
 	FlushFIFO() ;
 
 	SetCE( false ) ;
+}
+
+
+uint8_t daniel::nRF24L01::GetSetupRetr() const
+{
+	uint8_t ard = static_cast< uint8_t >( rfARD ) ;
+	uint8_t arc = ( 15 < rfARC ) ? 15 : rfARC ;
+
+	uint8_t res
+		= ( ( ard << 4 ) & 0xF0 )
+		| ( ( arc << 0 ) & 0x0F ) ;
+
+	return res ;
 }
 
 
