@@ -42,6 +42,7 @@ private :
 	static uint8_t const   rfAddrP2 ;
 	static uint8_t const   rfAddrP3 ;
 	static uint8_t const   rfAddrP4 ;
+	static uint8_t const   rfAddrP5 ;
 	static GPIO_TypeDef  * IRQ_Port ;
 
 public :
@@ -66,6 +67,9 @@ private :
 	uint8_t    rfARC ;
 
 private :
+	bool rfPipe[ 6 ] ;
+
+private :
 	void Init() ;
 	void SetCS( bool const & isEnable = true  ) ;
 	void SetCE( bool const & isEnable = false ) ;
@@ -83,8 +87,13 @@ private :
 
 	void SetRfMode( RfMode const & mode ) ;
 
+	uint8_t GetEnAA()       const ;
+	uint8_t GetEnRxAddr()   const ;
 	uint8_t GetSetupRetr()  const ;
 	uint8_t GetRfSetupVal() const ;
+	uint8_t GetDynPd()      const ;
+
+private :
 	uint8_t PushToTxFifo ( uint8_t * payload , uint8_t const & length ) ;
 	uint8_t PopFromRxFifo( uint8_t * payload , uint8_t       & length ) ;
 
@@ -116,6 +125,14 @@ public :
 public :
 	uint8_t Receive ( uint8_t * payload , uint8_t       & length ) ;
 	uint8_t Transmit( uint8_t * payload , uint8_t const & length ) ;
+
+public :
+	void SetRxPipe( uint8_t const & pipeNo , bool const & is ) ;
+	void SetRxPipe1( bool const & is ) ;
+	void SetRxPipe2( bool const & is ) ;
+	void SetRxPipe3( bool const & is ) ;
+	void SetRxPipe4( bool const & is ) ;
+	void SetRxPipe5( bool const & is ) ;
 
 public :
 	void ShowSpecificValue() ;

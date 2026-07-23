@@ -16,6 +16,7 @@ uint8_t const   daniel::nRF24L01::rfAddrP1[ 5 ] = { 0x13 , 0xA3 , 0xB3 , 0xCD , 
 uint8_t const   daniel::nRF24L01::rfAddrP2      =  rfAddrP1[ 4 ] + 1 ;
 uint8_t const   daniel::nRF24L01::rfAddrP3      =  rfAddrP1[ 4 ] + 2 ;
 uint8_t const   daniel::nRF24L01::rfAddrP4      =  rfAddrP1[ 4 ] + 3 ;
+uint8_t const   daniel::nRF24L01::rfAddrP5      =  rfAddrP1[ 4 ] + 4 ;
 
 
 daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLog )
@@ -25,6 +26,14 @@ daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLo
       rfARC( 3 )
 {
 	SetCS( false ) ;
+
+	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	{
+		rfPipe[ pos ] = false ;
+	}
+
+	rfPipe[ 0 ] = true ;
+
 	LogEvent( "nRF24L01: created\r\n" ) ;
 }
 
@@ -36,6 +45,14 @@ daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , USART * _pUart , bool
 	  rfARC( 3 )
 {
 	SetCS( false ) ;
+
+	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	{
+		rfPipe[ pos ] = false ;
+	}
+
+	rfPipe[ 0 ] = true ;
+
 	LogEvent( "nRF24L01: created\r\n" ) ;
 }
 
@@ -145,6 +162,64 @@ void daniel::nRF24L01::SetARC( uint8_t const & arc )
 	}
 }
 
+void daniel::nRF24L01::SetRxPipe( uint8_t const & pipeNo , bool const & is )
+{
+	if( 0 == pipeNo || 5 < pipeNo )
+	{
+		return ;
+	}
+
+	rfPipe[ pipeNo ] = is ;
+
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg ;
+
+	bool wasCE = isCE ;
+
+	uint8_t enAA     = GetEnAA() ;
+	uint8_t enRxAddr = GetEnRxAddr() ;
+	uint8_t dynPd    = GetDynPd() ;
+
+	SetCE( false ) ;
+	AccessReg( TYPE::WRITE , REG::EN_AA     , enAA     ) ; // enable AUTOACK
+	AccessReg( TYPE::WRITE , REG::EN_RXADDR , enRxAddr ) ; // enable RX address for all data pipe
+	AccessReg( TYPE::WRITE , REG::DYNPD     , dynPd    ) ; // Dynamic Payload
+
+	if( true == wasCE || RfMode::RX == rfMode )
+	{
+		SetCE( true ) ;
+	}
+}
+
+void daniel::nRF24L01::SetRxPipe1( bool const & is )
+{
+	SetRxPipe( 1 , is ) ;
+}
+
+
+void daniel::nRF24L01::SetRxPipe2( bool const & is )
+{
+	SetRxPipe( 2 , is ) ;
+}
+
+
+void daniel::nRF24L01::SetRxPipe3( bool const & is )
+{
+	SetRxPipe( 3 , is ) ;
+}
+
+
+void daniel::nRF24L01::SetRxPipe4( bool const & is )
+{
+	SetRxPipe( 4 , is ) ;
+}
+
+
+void daniel::nRF24L01::SetRxPipe5( bool const & is )
+{
+	SetRxPipe( 5 , is ) ;
+}
+
 
 void daniel::nRF24L01::Init()
 {
@@ -155,24 +230,27 @@ void daniel::nRF24L01::Init()
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
-	uint8_t enAA      = ( true == autoACK ) ? 0x01 : 0x00 ;
+	uint8_t enAA      = GetEnAA() ;
+	uint8_t enRxAddr  = GetEnRxAddr() ;
 	uint8_t setupRetr = GetSetupRetr() ;
 	uint8_t rfSetup   = GetRfSetupVal() ;
 	uint8_t ch        = ( 125 < rfChannel ) ? 125 : rfChannel ;
+	uint8_t dynPd     = GetDynPd() ;
 
 	AccessReg( TYPE::WRITE , REG::CONFIG      , 0x08 ) ; // enable CRC
-	AccessReg( TYPE::WRITE , REG::EN_AA       , enAA ) ; // enable AUTOACK for P0
-	AccessReg( TYPE::WRITE , REG::EN_RXADDR   , 0x3F ) ; // enable RX address for all data pipe
-	AccessReg( TYPE::WRITE , REG::SETUP_AW    , 0x03 ) ; // address field width( 5 )
+	AccessReg( TYPE::WRITE , REG::EN_AA       , enAA ) ; // enable AUTOACK
+	AccessReg( TYPE::WRITE , REG::EN_RXADDR   , enRxAddr  ) ; // enable RX address for all data pipe
+	AccessReg( TYPE::WRITE , REG::SETUP_AW    , 0x03      ) ; // address field width( 5 )
 	AccessReg( TYPE::WRITE , REG::SETUP_RETR  , setupRetr ) ; // auto retransmit delay , retransmit count
 	AccessReg( TYPE::WRITE , REG::RF_CH       , ch        ) ; // RF channel
 	AccessReg( TYPE::WRITE , REG::RF_SETUP    , rfSetup   ) ; // data rates and RF output power
 	AccessReg( TYPE::WRITE , REG::RF_STATUS   , 0x7F      ) ; // interrupt enabled for Rx and TX , RX FIFO empty, TX FIFO ready
 	AccessReg( TYPE::WRITE , REG::RX_ADDR_P0  , 0x05 ,   rfAddrP0 ) ; // Rx Address - pipe 0
 	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x05 ,   rfAddrP1 ) ; // Rx Address - pipe 1
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P1  , 0x01 , & rfAddrP2 ) ; // Rx Address - pipe 2
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P2  , 0x01 , & rfAddrP3 ) ; // Rx Address - pipe 3
-	AccessReg( TYPE::WRITE , REG::RX_ADDR_P3  , 0x01 , & rfAddrP4 ) ; // Rx Address - pipe 4
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P2  , 0x01 , & rfAddrP2 ) ; // Rx Address - pipe 2
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P3  , 0x01 , & rfAddrP3 ) ; // Rx Address - pipe 3
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P4  , 0x01 , & rfAddrP4 ) ; // Rx Address - pipe 4
+	AccessReg( TYPE::WRITE , REG::RX_ADDR_P5  , 0x01 , & rfAddrP5 ) ; // Rx Address - pipe 5
 	AccessReg( TYPE::WRITE , REG::TX_ADDR     , 0x05 ,   rfAddrP0 ) ; // Tx Address
 	AccessReg( TYPE::WRITE , REG::RX_PW_P0    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P1    , payloadSize ) ; // payload size
@@ -180,13 +258,39 @@ void daniel::nRF24L01::Init()
 	AccessReg( TYPE::WRITE , REG::RX_PW_P3    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P4    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P5    , payloadSize ) ; // payload size
-	AccessReg( TYPE::WRITE , REG::FIFO_STATUS , 0x11 ) ; // RX and TX FIFO( empty )
-	AccessReg( TYPE::WRITE , REG::DYNPD       , 0x3F ) ; // Dynamic payload for all pipes
-	AccessReg( TYPE::WRITE , REG::FEATURE     , 0x04 ) ; // Others - FEATURE.EN_DPL = 1
+	AccessReg( TYPE::WRITE , REG::FIFO_STATUS , 0x11  ) ; // RX and TX FIFO( empty )
+	AccessReg( TYPE::WRITE , REG::DYNPD       , dynPd ) ; // Dynamic Payload
+	AccessReg( TYPE::WRITE , REG::FEATURE     , 0x04  ) ; // Others - FEATURE.EN_DPL = 1
 
 	FlushFIFO() ;
 
 	SetCE( false ) ;
+}
+
+
+uint8_t daniel::nRF24L01::GetEnAA() const
+{
+	uint8_t res = 0x00 ;
+
+	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	{
+		res |= ( true == rfPipe[ pos ] ) ? ( 0x01 << pos ) : 0x00 ;
+	}
+
+	return res ;
+}
+
+
+uint8_t daniel::nRF24L01::GetEnRxAddr() const
+{
+	uint8_t res = 0x00 ;
+
+	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	{
+		res |= ( true == rfPipe[ pos ] ) ? ( 0x01 << pos ) : 0x00 ;
+	}
+
+	return res ;
 }
 
 
@@ -198,6 +302,19 @@ uint8_t daniel::nRF24L01::GetSetupRetr() const
 	uint8_t res
 		= ( ( ard << 4 ) & 0xF0 )
 		| ( ( arc << 0 ) & 0x0F ) ;
+
+	return res ;
+}
+
+
+uint8_t daniel::nRF24L01::GetDynPd() const
+{
+	uint8_t res = 0x00 ;
+
+	for( uint8_t pos = 0 ; pos < 6 ; ++pos )
+	{
+		res |= ( true == rfPipe[ pos ] ) ? ( 0x01 << pos ) : 0x00 ;
+	}
 
 	return res ;
 }
@@ -235,9 +352,10 @@ void daniel::nRF24L01::Inspection()
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RF_STATUS   ) ; // interrupt for Rx and TX
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P0  , 0x05 ) ; // Rx Address - pipe 0
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P1  , 0x05 ) ; // Rx Address - pipe 1
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P1  , 0x01 ) ; // Rx Address - pipe 2
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P2  , 0x01 ) ; // Rx Address - pipe 3
-	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P3  , 0x01 ) ; // Rx Address - pipe 4
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P2  , 0x01 ) ; // Rx Address - pipe 2
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P3  , 0x01 ) ; // Rx Address - pipe 3
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P4  , 0x01 ) ; // Rx Address - pipe 4
+	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_ADDR_P5  , 0x01 ) ; // Rx Address - pipe 5
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::TX_ADDR     , 0x05 ) ; // Tx Address - pipe 0
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P0    ) ; // data pipe 0
 	value[ valuePos++ ] = AccessReg( TYPE::READ , REG::RX_PW_P1    ) ; // data pipe 1
@@ -403,12 +521,12 @@ uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload , uint8_t & length )
 
 	length = len ;
 
-	LogEvent( "nRF24L01: PopFromRxFifo - " ) ;
+	LogDebug( "nRF24L01: PopFromRxFifo - " ) ;
 	for( uint8_t pos = 0 ; pos < length ; ++pos )
 	{
-		LogEvent( "0x%02X " , payload[ pos ] ) ;
+		LogDebug( "0x%02X " , payload[ pos ] ) ;
 	}
-	LogEvent( "\r\n" ) ;
+	LogDebug( "\r\n" ) ;
 
 	return 0x01 ;
 }
