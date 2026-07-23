@@ -89,7 +89,7 @@ void MainProc()
 		{
 			if( daniel::RfMode::TX == rfMode )
 			{
-				rf.Transmit( payload ) ;
+				rf.Transmit( payload , 32 ) ;
 			}
 			else
 			{

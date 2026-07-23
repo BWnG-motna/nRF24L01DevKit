@@ -85,8 +85,8 @@ private :
 
 	uint8_t GetSetupRetr()  const ;
 	uint8_t GetRfSetupVal() const ;
-	uint8_t PushToTxFifo ( uint8_t * payload ) ;
-	uint8_t PopFromRxFifo( uint8_t * payload ) ;
+	uint8_t PushToTxFifo ( uint8_t * payload , uint8_t const & length ) ;
+	uint8_t PopFromRxFifo( uint8_t * payload , uint8_t       & length ) ;
 
 private :
 	void Inspection() ;
@@ -114,8 +114,8 @@ public :
 	void SetARC( uint8_t const & arc ) ;
 
 public :
-	uint8_t Receive ( uint8_t * payload ) ;
-	uint8_t Transmit( uint8_t * payload ) ;
+	uint8_t Receive ( uint8_t * payload , uint8_t       & length ) ;
+	uint8_t Transmit( uint8_t * payload , uint8_t const & length ) ;
 
 public :
 	void ShowSpecificValue() ;

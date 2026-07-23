@@ -181,8 +181,8 @@ void daniel::nRF24L01::Init()
 	AccessReg( TYPE::WRITE , REG::RX_PW_P4    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P5    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::FIFO_STATUS , 0x11 ) ; // RX and TX FIFO( empty )
-	AccessReg( TYPE::WRITE , REG::DYNPD       , 0x00 ) ; // No Dynamic payload length
-	AccessReg( TYPE::WRITE , REG::FEATURE     , 0x00 ) ; // Others
+	AccessReg( TYPE::WRITE , REG::DYNPD       , 0x3F ) ; // Dynamic payload for all pipes
+	AccessReg( TYPE::WRITE , REG::FEATURE     , 0x04 ) ; // Others - FEATURE.EN_DPL = 1
 
 	FlushFIFO() ;
 
@@ -290,8 +290,14 @@ void daniel::nRF24L01::SetRfMode( RfMode const & mode )
 }
 
 
-uint8_t daniel::nRF24L01::PushToTxFifo( uint8_t * payload )
+uint8_t daniel::nRF24L01::PushToTxFifo( uint8_t * payload , uint8_t const & length )
 {
+	if( nullptr == payload || 1 > length )
+	{
+		return 0x00 ;
+	}
+
+
 	namespace CMD = nordic::cmd ;
 
 	uint8_t cmd = CMD::W_TX_PAYLOAD ;
@@ -307,7 +313,9 @@ uint8_t daniel::nRF24L01::PushToTxFifo( uint8_t * payload )
 		return 0x00 ;
 	}
 
-	spiRes = HAL_SPI_Transmit( pHandle , payload , payloadSize , spiTimeOut ) ;
+	uint8_t len = ( 32 < length ) ? 32 : length ;
+
+	spiRes = HAL_SPI_Transmit( pHandle , payload , len , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
 		LogEvent( "nRF24L01: PushToTxFifo  - [ %s ] - error - HAL_SPI_Transmit()\r\n" , errType[ spiRes ] ) ;
@@ -318,7 +326,7 @@ uint8_t daniel::nRF24L01::PushToTxFifo( uint8_t * payload )
 	SetCS( false ) ;
 
 	LogDebug( "nRF24L01: PushToTxFifo  - " ) ;
-	for( uint8_t pos = 0 ; pos < payloadSize ; ++pos )
+	for( uint8_t pos = 0 ; pos < len ; ++pos )
 	{
 		LogDebug( "0x%02X " , payload[ pos ] ) ;
 	}
@@ -328,11 +336,19 @@ uint8_t daniel::nRF24L01::PushToTxFifo( uint8_t * payload )
 }
 
 
-uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload )
+uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload , uint8_t & length )
 {
-	namespace CMD = nordic::cmd ;
+	if( nullptr == payload )
+	{
+		return 0x00 ;
+	}
 
-	uint8_t cmd = CMD::R_RX_PAYLOAD ;
+
+	namespace CMD  = nordic::cmd  ;
+	namespace TYPE = nordic::type ;
+
+
+	uint8_t cmd = CMD::R_RX_PL_WID ;
 	uint8_t ret = 0x00 ;
 
 	SetCS( true ) ;
@@ -340,28 +356,71 @@ uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload )
 	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
 	if( HAL_OK != spiRes )
 	{
-		LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_TransmitReceive()\r\n" , errType[ spiRes ] ) ;
+		LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_TransmitReceive() - R_RX_PL_WID\r\n" , errType[ spiRes ] ) ;
 		SetCS( false ) ;
 		return 0x00 ;
 	}
 
-	spiRes = HAL_SPI_Receive( pHandle , payload , payloadSize , spiTimeOut ) ;
+	uint8_t len = 0x00 ;
+	spiRes = HAL_SPI_Receive( pHandle , & len , 1 , spiTimeOut ) ;
+	if( HAL_OK != spiRes )
+	{
+		LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_Receive() - R_RX_PL_WID\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
+	}
 
 	SetCS( false ) ;
 
-	LogDebug( "nRF24L01: PopFromRxFifo - " ) ;
-	for( uint8_t pos = 0 ; pos < payloadSize ; ++pos )
+	if( 0 == len || 32 < len )
 	{
-		LogDebug( "0x%02X " , payload[ pos ] ) ;
+		FlushFIFO( TYPE::RX ) ;
+		return 0x00 ;
 	}
-	LogDebug( "\r\n" ) ;
+
+	cmd = CMD::R_RX_PAYLOAD ;
+	ret = 0x00 ;
+
+	SetCS( true ) ;
+
+	spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
+	if( HAL_OK != spiRes )
+	{
+		LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_TransmitReceive() - R_RX_PAYLOAD\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
+	}
+
+	spiRes = HAL_SPI_Receive( pHandle , payload , len , spiTimeOut ) ;
+	if( HAL_OK != spiRes )
+	{
+		LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_Receive() - R_RX_PAYLOAD\r\n" , errType[ spiRes ] ) ;
+		SetCS( false ) ;
+		return 0x00 ;
+	}
+
+	SetCS( false ) ;
+
+	length = len ;
+
+	LogEvent( "nRF24L01: PopFromRxFifo - " ) ;
+	for( uint8_t pos = 0 ; pos < length ; ++pos )
+	{
+		LogEvent( "0x%02X " , payload[ pos ] ) ;
+	}
+	LogEvent( "\r\n" ) ;
 
 	return 0x01 ;
 }
 
 
-uint8_t daniel::nRF24L01::Receive( uint8_t * payload )
+uint8_t daniel::nRF24L01::Receive( uint8_t * payload , uint8_t & length )
 {
+	if( nullptr == payload )
+	{
+		return 0 ;
+	}
+
 	namespace TYPE = nordic::type ;
 	namespace REG  = nordic::reg  ;
 
@@ -371,17 +430,24 @@ uint8_t daniel::nRF24L01::Receive( uint8_t * payload )
 		return 0 ;
 	}
 
-	uint8_t res = PopFromRxFifo( payload ) ;
+	uint8_t res = PopFromRxFifo( payload , length ) ;
 
 	return res ;
 }
 
 
-uint8_t daniel::nRF24L01::Transmit( uint8_t * payload )
+uint8_t daniel::nRF24L01::Transmit( uint8_t * payload , uint8_t const & length )
 {
+	if( nullptr == payload || 1 > length )
+	{
+		return 0 ;
+	}
+
+	uint8_t len = ( 32 < length ) ? 32 : length ;
+
 	SetCE( false ) ;
 
-	uint8_t res = PushToTxFifo( payload ) ;
+	uint8_t res = PushToTxFifo( payload , len ) ;
 
 	SetCE( true  ) ;
 	DelayUS( 20 ) ;
@@ -650,8 +716,9 @@ int8_t daniel::nRF24L01::IrqRx()
 	while( true )
 	{
 		uint8_t payload[ 32 ] ;
+		uint8_t length = 0 ;
 
-		uint8_t res = Receive( payload ) ;
+		uint8_t res = Receive( payload , length ) ;
 		if( 0 == res )
 		{
 			break ;
