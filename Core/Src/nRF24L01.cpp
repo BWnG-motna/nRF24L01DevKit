@@ -121,6 +121,43 @@ void daniel::nRF24L01::SetChannel( uint8_t const & ch )
 }
 
 
+bool daniel::nRF24L01::Scan( bool channel[ 126 ] )
+{
+	if( RfMode::RX != rfMode )
+	{
+		return false ;
+	}
+
+	uint8_t wasRfChannel = rfChannel ;
+	SetCE( false ) ;
+
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg  ;
+
+	for( uint8_t pos = 0 ; pos < 126 ; ++pos )
+	{
+		AccessReg( TYPE::WRITE , REG::RF_CH , pos ) ;
+		DelayUS( 200 ) ;
+
+		SetCE( true  ) ;
+		DelayUS( 200 ) ;
+		SetCE( false ) ;
+
+		uint8_t val = 0x00 ;
+		uint8_t res = AccessReg( TYPE::READ , REG::RPD , val ) ;
+
+		channel[ pos ] = ( 0 < ( 0x01 & res ) ) ? true : false ;
+	}
+
+	SetCE( true ) ;
+
+	FlushFIFO( TYPE::RX ) ;
+	SetChannel( wasRfChannel ) ;
+
+	return true ;
+}
+
+
 void daniel::nRF24L01::SetARD( RfARD const & ard )
 {
 	rfARD = ard ;

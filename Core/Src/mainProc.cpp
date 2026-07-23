@@ -31,6 +31,7 @@ volatile static bool runOp     = false ;
 
 
 #define DIPSW_IS_EXISTED ( 0 )
+#define CHECK_RF_CHANNEL ( 0 )
 
 
 void MainProc()
@@ -78,6 +79,26 @@ void MainProc()
 	{
 		payload[ pos ] = pos ;
 	}
+
+#if ( CHECK_RF_CHANNEL )
+	{
+		rfMode = rf.GetRfMode() ;
+
+		bool channel[ 126 ] ;
+		if( daniel::RfMode::RX == rfMode )
+		{
+			rf.Scan( channel ) ;
+		}
+
+		for( uint8_t pos = 0 ; pos < 126 ; ++pos )
+		{
+			if( true == channel[ pos ] )
+			{
+				uart1.SendMessage( "%4u - detected\r\n" , pos ) ;
+			}
+		}
+	}
+#endif
 
 	runOp = true ;
 

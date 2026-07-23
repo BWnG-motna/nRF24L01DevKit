@@ -115,6 +115,9 @@ public :
 	int8_t Irq() ;
 
 public :
+	bool Scan( bool channel[ 126 ] ) ;
+
+public :
 	void SetUart( USART * _pUart ) ;
 	void LeaveLog( bool const & is ) ;
 
