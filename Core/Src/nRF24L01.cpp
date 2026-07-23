@@ -428,9 +428,9 @@ void daniel::nRF24L01::PowerOnOff( bool isOn )
 	bool wasCE = isCE ;
 	SetCE( false ) ;
 
-	uint8_t conf = AccessReg( TYPE::READ , REG::CONFIG ) ;
-
-	conf = ( true == isOn ) ? ( conf | 0x02 ) : ( conf & 0xFD ) ;
+	uint8_t conf = 0x00 ;
+	conf = AccessReg( TYPE::READ , REG::CONFIG ) ;
+	conf = ( true == isOn ) ? ( conf | 0x02 ) : ( conf & 0xFD ) ; // PWR_UP
 
 	AccessReg( TYPE::WRITE , REG::CONFIG , conf ) ;
 
@@ -451,10 +451,11 @@ void daniel::nRF24L01::SetRfMode( RfMode const & mode )
 
 	rfMode = mode ;
 
-	uint8_t val     = AccessReg( TYPE::READ  , REG::CONFIG ) ;
-	uint8_t confVal = ( RfMode::RX == rfMode ) ? ( val | 0x01 ) : ( val & 0xFE ) ;
+	uint8_t conf = 0x00 ;
+	conf = AccessReg( TYPE::READ  , REG::CONFIG ) ;
+	conf = ( RfMode::RX == rfMode ) ? ( conf | 0x01 ) : ( conf & 0xFE ) ; // PRIM_RX
 
-	AccessReg( TYPE::WRITE , REG::CONFIG , confVal ) ;
+	AccessReg( TYPE::WRITE , REG::CONFIG , conf ) ;
 
 	if( true == wasCE || RfMode::RX == rfMode )
 	{
