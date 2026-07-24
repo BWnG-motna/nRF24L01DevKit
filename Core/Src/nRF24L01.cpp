@@ -533,6 +533,11 @@ uint8_t daniel::nRF24L01::PushToTxFifo( uint8_t * payload , uint8_t const & leng
 		return 0x00 ;
 	}
 
+	if( false == dynPayload && payloadSize != length )
+	{
+		return 0x00 ;
+	}
+
 
 	namespace CMD = nordic::cmd ;
 
@@ -687,6 +692,12 @@ uint8_t daniel::nRF24L01::Transmit( uint8_t * payload , uint8_t const & length )
 	{
 		return 0 ;
 	}
+
+	if( false == dynPayload && payloadSize != length )
+	{
+		return 0 ;
+	}
+
 
 	uint8_t len = ( 32 < length ) ? 32 : length ;
 
