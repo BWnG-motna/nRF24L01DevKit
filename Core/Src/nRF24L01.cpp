@@ -21,7 +21,7 @@ uint8_t const   daniel::nRF24L01::rfAddrP5      =  rfAddrP1[ 4 ] + 4 ;
 
 daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLog )
 	: pHandle( _pHandle )         , isCS( false )     , isCE( false )    , pUart( nullptr )    , payloadSize( 32 ) ,
-	  leaveLog( _leaveLog )       , debugLog( false ) , autoACK( true )  , rfChannel( 0x4C )   ,
+	  leaveLog( _leaveLog )       , debugLog( false ) , autoACK( true )  , dynPayload( false ) , rfChannel( 0x4C ) ,
 	  rfARD( RfARD::Delay_250us ) , rfMode( RfMode::Unknown ) , rfPower( RfPower::Power_0dBm ) , rfLnaGain( RfLnaGain::High ) , rfDataRate( RfDataRate::Rate_1Mbps ) ,
       rfARC( 3 )
 {
@@ -40,7 +40,7 @@ daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , bool const & _leaveLo
 
 daniel::nRF24L01::nRF24L01( SPI_HandleTypeDef * _pHandle , USART * _pUart , bool const & _leaveLog )
 	: pHandle( _pHandle )         , isCS( false )     , isCE( false )    , pUart( _pUart )     , payloadSize( 32 ) ,
-	  leaveLog( _leaveLog )       , debugLog( false ) , autoACK( true )  , rfChannel( 0x4C )   ,
+	  leaveLog( _leaveLog )       , debugLog( false ) , autoACK( true )  , dynPayload( false ) , rfChannel( 0x4C ) ,
 	  rfARD( RfARD::Delay_250us ) , rfMode( RfMode::Unknown ) , rfPower( RfPower::Power_0dBm ) , rfLnaGain( RfLnaGain::High ) , rfDataRate( RfDataRate::Rate_1Mbps ) ,
 	  rfARC( 3 )
 {
@@ -257,6 +257,61 @@ void daniel::nRF24L01::SetRxPipe5( bool const & is )
 }
 
 
+void daniel::nRF24L01::SetDynamicPayload()
+{
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg ;
+
+	bool wasCE = isCE ;
+
+	dynPayload = true ;
+
+	uint8_t dynPd   = GetDynPd() ;
+	uint8_t feature = 0x04 ;
+
+	SetCE( false ) ;
+
+	AccessReg( TYPE::WRITE , REG::DYNPD   , dynPd   ) ;
+	AccessReg( TYPE::WRITE , REG::FEATURE , feature ) ;
+
+	if( true == wasCE || RfMode::RX == rfMode )
+	{
+		SetCE( true ) ;
+	}
+}
+
+
+void daniel::nRF24L01::SetStaticPayload( uint8_t const & length )
+{
+	namespace TYPE = nordic::type ;
+	namespace REG  = nordic::reg ;
+
+	bool wasCE = isCE ;
+
+	dynPayload  = false ;
+	payloadSize = ( 0 == length || 32 < length ) ? 32 : length ;
+
+	uint8_t dynPd   = GetDynPd() ;
+	uint8_t feature = 0x00 ;
+
+	SetCE( false ) ;
+
+	AccessReg( TYPE::WRITE , REG::DYNPD    , dynPd   ) ;
+	AccessReg( TYPE::WRITE , REG::FEATURE  , feature ) ;
+	AccessReg( TYPE::WRITE , REG::RX_PW_P0 , payloadSize ) ;
+	AccessReg( TYPE::WRITE , REG::RX_PW_P1 , payloadSize ) ;
+	AccessReg( TYPE::WRITE , REG::RX_PW_P2 , payloadSize ) ;
+	AccessReg( TYPE::WRITE , REG::RX_PW_P3 , payloadSize ) ;
+	AccessReg( TYPE::WRITE , REG::RX_PW_P4 , payloadSize ) ;
+	AccessReg( TYPE::WRITE , REG::RX_PW_P5 , payloadSize ) ;
+
+	if( true == wasCE || RfMode::RX == rfMode )
+	{
+		SetCE( true ) ;
+	}
+}
+
+
 void daniel::nRF24L01::Init()
 {
 	namespace TYPE = nordic::type ;
@@ -273,6 +328,7 @@ void daniel::nRF24L01::Init()
 	uint8_t rfSetup   = GetRfSetupVal() ;
 	uint8_t ch        = ( 125 < rfChannel ) ? 125 : rfChannel ;
 	uint8_t dynPd     = GetDynPd() ;
+	uint8_t feature   = ( true == dynPayload ) ? 0x04 : 0x00 ;
 
 	AccessReg( TYPE::WRITE , REG::CONFIG      , 0x08 ) ; // enable CRC
 	AccessReg( TYPE::WRITE , REG::EN_AA       , enAA ) ; // enable AUTOACK
@@ -295,9 +351,9 @@ void daniel::nRF24L01::Init()
 	AccessReg( TYPE::WRITE , REG::RX_PW_P3    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P4    , payloadSize ) ; // payload size
 	AccessReg( TYPE::WRITE , REG::RX_PW_P5    , payloadSize ) ; // payload size
-	AccessReg( TYPE::WRITE , REG::FIFO_STATUS , 0x11  ) ; // RX and TX FIFO( empty )
-	AccessReg( TYPE::WRITE , REG::DYNPD       , dynPd ) ; // Dynamic Payload
-	AccessReg( TYPE::WRITE , REG::FEATURE     , 0x04  ) ; // Others - FEATURE.EN_DPL = 1
+	AccessReg( TYPE::WRITE , REG::FIFO_STATUS , 0x11    ) ; // RX and TX FIFO( empty )
+	AccessReg( TYPE::WRITE , REG::DYNPD       , dynPd   ) ; // Dynamic Payload
+	AccessReg( TYPE::WRITE , REG::FEATURE     , feature ) ; // Others
 
 	FlushFIFO() ;
 
@@ -347,6 +403,12 @@ uint8_t daniel::nRF24L01::GetSetupRetr() const
 uint8_t daniel::nRF24L01::GetDynPd() const
 {
 	uint8_t res = 0x00 ;
+
+
+	if( false == dynPayload )
+	{
+		return res ;
+	}
 
 	for( uint8_t pos = 0 ; pos < RfPipeCnt ; ++pos )
 	{
@@ -449,7 +511,7 @@ void daniel::nRF24L01::SetRfMode( RfMode const & mode )
 	bool wasCE = isCE ;
 	SetCE( false ) ;
 
-	rfMode = mode ;
+	rfMode = ( RfMode::Unknown == mode ) ? RfMode::TX : mode ;
 
 	uint8_t conf = 0x00 ;
 	conf = AccessReg( TYPE::READ  , REG::CONFIG ) ;
@@ -523,32 +585,41 @@ uint8_t daniel::nRF24L01::PopFromRxFifo( uint8_t * payload , uint8_t & length )
 
 	uint8_t cmd = CMD::R_RX_PL_WID ;
 	uint8_t ret = 0x00 ;
-
-	SetCS( true ) ;
-
-	HAL_StatusTypeDef spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
-	if( HAL_OK != spiRes )
-	{
-		LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_TransmitReceive() - R_RX_PL_WID\r\n" , errType[ spiRes ] ) ;
-		SetCS( false ) ;
-		return 0x00 ;
-	}
-
 	uint8_t len = 0x00 ;
-	spiRes = HAL_SPI_Receive( pHandle , & len , 1 , spiTimeOut ) ;
-	if( HAL_OK != spiRes )
+
+	HAL_StatusTypeDef spiRes = HAL_OK ;
+
+	if( true == dynPayload )
 	{
-		LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_Receive() - R_RX_PL_WID\r\n" , errType[ spiRes ] ) ;
+		SetCS( true ) ;
+
+		spiRes = HAL_SPI_TransmitReceive( pHandle , & cmd , & ret , 1 , spiTimeOut ) ;
+		if( HAL_OK != spiRes )
+		{
+			LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_TransmitReceive() - R_RX_PL_WID\r\n" , errType[ spiRes ] ) ;
+			SetCS( false ) ;
+			return 0x00 ;
+		}
+
+		spiRes = HAL_SPI_Receive( pHandle , & len , 1 , spiTimeOut ) ;
+		if( HAL_OK != spiRes )
+		{
+			LogEvent( "nRF24L01: PopFromRxFifo - [ %s ] - error - HAL_SPI_Receive() - R_RX_PL_WID\r\n" , errType[ spiRes ] ) ;
+			SetCS( false ) ;
+			return 0x00 ;
+		}
+
 		SetCS( false ) ;
-		return 0x00 ;
+
+		if( 0 == len || 32 < len )
+		{
+			FlushFIFO( TYPE::RX ) ;
+			return 0x00 ;
+		}
 	}
-
-	SetCS( false ) ;
-
-	if( 0 == len || 32 < len )
+	else
 	{
-		FlushFIFO( TYPE::RX ) ;
-		return 0x00 ;
+		len = payloadSize ;
 	}
 
 	cmd = CMD::R_RX_PAYLOAD ;
@@ -837,7 +908,7 @@ void daniel::nRF24L01::LogDebug( char const * const format , ... ) const
 
 int8_t daniel::nRF24L01::Irq()
 {
-	int8_t res = ( RfMode::TX == rfMode ) ? IrqTx() : IrqRx() ;
+	int8_t res = ( RfMode::RX == rfMode ) ? IrqRx() : IrqTx() ;
 
 	return res ;
 }

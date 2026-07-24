@@ -52,6 +52,7 @@ private :
 	bool leaveLog ;
 	bool debugLog ;
 	bool autoACK  ;
+	bool dynPayload ;
 
 private :
 	uint8_t    rfChannel ;
@@ -137,6 +138,10 @@ public :
 	void SetRxPipe3( bool const & is ) ;
 	void SetRxPipe4( bool const & is ) ;
 	void SetRxPipe5( bool const & is ) ;
+
+public :
+	void SetDynamicPayload() ;
+	void SetStaticPayload( uint8_t const & length ) ;
 
 public :
 	void ShowSpecificValue() ;
